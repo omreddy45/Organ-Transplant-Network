@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Sparkles, User, Heart } from "lucide-react";
+import { Eye, EyeOff, Sparkles, User, Heart, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -156,7 +156,12 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<'patient' | 'donor'>('patient');
+  const [licenseNumber, setLicenseNumber] = useState("");
+  const [dob, setDob] = useState("");
+  const [city, setCity] = useState("");
+  const [stateValue, setStateValue] = useState("");
+  const [location, setLocation] = useState("");
+  const [role, setRole] = useState<'patient' | 'donor' | 'organization'>('patient');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -270,7 +275,7 @@ export default function SignupPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, password, role, licenseNumber, dob, city, state: stateValue, location }),
       });
 
       if (res.ok) {
@@ -478,6 +483,18 @@ export default function SignupPage() {
                 <Heart className={`w-6 h-6 mb-2 ${role === 'donor' ? 'text-primary' : 'text-muted-foreground'}`} />
                 <span className={`text-sm font-medium ${role === 'donor' ? 'text-primary' : 'text-muted-foreground'}`}>Donor</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setRole('organization')}
+                className={`flex-1 flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                  role === 'organization' 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border/60 bg-background hover:bg-accent'
+                }`}
+              >
+                <Building2 className={`w-6 h-6 mb-2 ${role === 'organization' ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-medium ${role === 'organization' ? 'text-primary' : 'text-muted-foreground'}`}>Org</span>
+              </button>
             </div>
 
             <div className="space-y-2 select-none">
@@ -512,6 +529,90 @@ export default function SignupPage() {
               />
             </div>
 
+            {role === 'organization' && (
+              <>
+                <div className="space-y-2 select-none">
+                  <Label htmlFor="licenseNumber" className="text-sm font-medium cursor-default">License Number</Label>
+                  <Input
+                    id="licenseNumber"
+                    type="text"
+                    placeholder="Govt License Number"
+                    value={licenseNumber}
+                    autoComplete="off"
+                    onChange={(e) => setLicenseNumber(e.target.value)}
+                    onFocus={() => setIsTyping(true)}
+                    onBlur={() => setIsTyping(false)}
+                    required={role === 'organization'}
+                    className="py-3 px-4 h-auto bg-background border-border/60 focus:border-primary"
+                  />
+                </div>
+                <div className="space-y-2 select-none">
+                  <Label htmlFor="location" className="text-sm font-medium cursor-default">Headquarters Location</Label>
+                  <Input
+                    id="location"
+                    type="text"
+                    placeholder="City, State"
+                    value={location}
+                    autoComplete="off"
+                    onChange={(e) => setLocation(e.target.value)}
+                    onFocus={() => setIsTyping(true)}
+                    onBlur={() => setIsTyping(false)}
+                    required={role === 'organization'}
+                    className="py-3 px-4 h-auto bg-background border-border/60 focus:border-primary"
+                  />
+                </div>
+              </>
+            )}
+
+            {(role === 'patient' || role === 'donor') && (
+              <div className="space-y-2 select-none">
+                <Label htmlFor="dob" className="text-sm font-medium cursor-default">Date of Birth</Label>
+                <Input
+                  id="dob"
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  onFocus={() => setIsTyping(true)}
+                  onBlur={() => setIsTyping(false)}
+                  required={role === 'patient' || role === 'donor'}
+                  className={cn("py-3 px-4 h-auto bg-background border-border/60 focus:border-primary", !dob && "text-muted-foreground")}
+                />
+              </div>
+            )}
+
+            {role === 'patient' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 select-none">
+                  <Label htmlFor="city" className="text-sm font-medium cursor-default">City</Label>
+                  <Input
+                    id="city"
+                    type="text"
+                    placeholder="City"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    onFocus={() => setIsTyping(true)}
+                    onBlur={() => setIsTyping(false)}
+                    required={role === 'patient'}
+                    className="py-3 px-4 h-auto bg-background border-border/60 focus:border-primary"
+                  />
+                </div>
+                <div className="space-y-2 select-none">
+                  <Label htmlFor="stateValue" className="text-sm font-medium cursor-default">State</Label>
+                  <Input
+                    id="stateValue"
+                    type="text"
+                    placeholder="State"
+                    value={stateValue}
+                    onChange={(e) => setStateValue(e.target.value)}
+                    onFocus={() => setIsTyping(true)}
+                    onBlur={() => setIsTyping(false)}
+                    required={role === 'patient'}
+                    className="py-3 px-4 h-auto bg-background border-border/60 focus:border-primary"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 select-none">
               <Label htmlFor="password" className="text-sm font-medium cursor-default">Password</Label>
               <div className="relative">
@@ -541,7 +642,7 @@ export default function SignupPage() {
             )}
 
             <Button type="submit" className="w-full h-12 text-base font-medium" size="lg" disabled={isLoading}>
-              {isLoading ? "Creating account..." : `Sign Up as ${role === 'patient' ? 'Patient' : 'Donor'}`}
+              {isLoading ? "Creating account..." : `Sign Up as ${role === 'patient' ? 'Patient' : role === 'donor' ? 'Donor' : 'Organization'}`}
             </Button>
           </form>
 

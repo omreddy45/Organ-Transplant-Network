@@ -7,7 +7,7 @@ CREATE TABLE Users (
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'doctor', 'patient', 'organization', 'donor') NOT NULL,
+    role ENUM('doctor','patient','organization','donor') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -23,8 +23,9 @@ CREATE TABLE Organization (
     org_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
-    location VARCHAR(100),
-    government_approved BOOLEAN,
+    location VARCHAR(100) NOT NULL,
+    license_number VARCHAR(100) UNIQUE NOT NULL,
+    government_approved BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
 
@@ -32,8 +33,8 @@ CREATE TABLE Organization_Head (
     org_id INT PRIMARY KEY,
     user_id INT UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
-    joining_date DATE,
-    term_length INT,
+    joining_date DATE NOT NULL,
+    term_length INT CHECK (term_length > 0),
     FOREIGN KEY (org_id) REFERENCES Organization(org_id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
@@ -42,7 +43,7 @@ CREATE TABLE Donor (
     donor_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
-    dob DATE,
+    dob DATE NOT NULL,
     donation_reason VARCHAR(255),
     FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
@@ -51,10 +52,10 @@ CREATE TABLE Patient (
     patient_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
-    dob DATE,
+    dob DATE NOT NULL,
     street VARCHAR(100),
-    city VARCHAR(50),
-    state VARCHAR(50),
+    city VARCHAR(50) NOT NULL,
+    state VARCHAR(50) NOT NULL,
     medical_insurance VARCHAR(100),
     FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
@@ -63,8 +64,8 @@ CREATE TABLE Doctor (
     doctor_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
-    specialization VARCHAR(100),
-    availability_status VARCHAR(50),
+    specialization VARCHAR(100) NOT NULL,
+    availability_status ENUM('available','busy','on_leave') DEFAULT 'available',
     org_id INT NOT NULL,
     FOREIGN KEY (org_id) REFERENCES Organization(org_id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
@@ -73,8 +74,8 @@ CREATE TABLE Doctor (
 CREATE TABLE Organ (
     organ_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
-    quantity INT DEFAULT 1,
-    availability_status VARCHAR(50),
+    quantity INT DEFAULT 1 CHECK (quantity > 0),
+    availability_status ENUM('available','reserved','transplanted') DEFAULT 'available',
     donor_id INT,
     org_id INT NOT NULL,
     FOREIGN KEY (donor_id) REFERENCES Donor(donor_id) ON DELETE SET NULL,
@@ -83,9 +84,9 @@ CREATE TABLE Organ (
 
 CREATE TABLE Transplant (
     transplant_id INT AUTO_INCREMENT PRIMARY KEY,
-    transplant_date DATE,
-    status VARCHAR(50),
-    bill_amount DECIMAL(10,2),
+    transplant_date DATE NOT NULL,
+    status ENUM('pending','completed','cancelled') DEFAULT 'pending',
+    bill_amount DECIMAL(10,2) CHECK (bill_amount >= 0),
     patient_id INT NOT NULL,
     doctor_id INT NOT NULL,
     organ_id INT UNIQUE NOT NULL,
@@ -126,16 +127,23 @@ CREATE TABLE Donor_Phone (
     FOREIGN KEY (donor_id) REFERENCES Donor(donor_id) ON DELETE CASCADE
 );
 
-CREATE TABLE Medical_History (
-    history_id INT AUTO_INCREMENT PRIMARY KEY,
-    patient_id INT NOT NULL,
-    medical_detail TEXT NOT NULL,
-    FOREIGN KEY (patient_id) REFERENCES Patient(patient_id) ON DELETE CASCADE
-);
-
 CREATE TABLE Organization_Phone (
     org_id INT NOT NULL,
     phone VARCHAR(15) NOT NULL,
     PRIMARY KEY (org_id, phone),
     FOREIGN KEY (org_id) REFERENCES Organization(org_id) ON DELETE CASCADE
 );
+
+CREATE TABLE Medical_History (
+    history_id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    medical_detail TEXT NOT NULL,
+    record_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES Patient(patient_id) ON DELETE CASCADE
+);
+
+SELECT * FROM Users;
+SELECT * FROM Patient;
+SELECT * FROM Sessions;
+
+
