@@ -1,0 +1,79 @@
+import { Router } from 'express';
+import db from '../db.js';
+
+const router = Router();
+
+// Create new match request (Patient)
+router.post('/', async (req, res) => {
+  const { patient_id, organ_type, urgency_level } = req.body;
+  try {
+    const [result] = await db.query(
+      "INSERT INTO Match_Request (patient_id, organ_type, urgency_level, status) VALUES (?, ?, ?, 'pending')",
+      [patient_id, organ_type, urgency_level || 'normal']
+    );
+    res.json({ message: 'Request submitted', request_id: result.insertId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// List all requests (Hospital) or patient's requests (Patient)
+router.get('/', async (req, res) => {
+  const { patient_id, status } = req.query;
+  try {
+    let sql = `
+      SELECT m.*, p.name as patient_name 
+      FROM Match_Request m 
+      JOIN Patient p ON m.patient_id = p.patient_id
+      WHERE 1=1
+    `;
+    const params = [];
+    if (patient_id) { sql += ' AND m.patient_id = ?'; params.push(patient_id); }
+    if (status) { sql += ' AND m.status = ?'; params.push(status); }
+    sql += ' ORDER BY m.request_id DESC';
+    const [rows] = await db.query(sql, params);
+    res.json(rows);
+  } catch(err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Hospital assigns organ to request
+router.post('/:id/assign', async (req, res) => {
+  const { id } = req.params;
+  const { organ_id, doctor_id, org_id } = req.body;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. Get Match Request
+    const [reqs] = await conn.query("SELECT * FROM Match_Request WHERE request_id = ?", [id]);
+    if (!reqs.length) throw new Error("Request not found");
+    const mReq = reqs[0];
+    if (mReq.status !== 'pending') throw new Error("Request already assigned/completed");
+
+    // 2. Update Match Request to assigned
+    await conn.query("UPDATE Match_Request SET status = 'assigned' WHERE request_id = ?", [id]);
+
+    // 3. Update Organ to 'reserved'
+    await conn.query("UPDATE Organ SET availability_status = 'reserved' WHERE organ_id = ?", [organ_id]);
+
+    // 4. Create Transplant record with status 'pending'
+    await conn.query(
+      "INSERT INTO Transplant (transplant_date, status, bill_amount, patient_id, doctor_id, organ_id, org_id) VALUES (CURDATE(), 'pending', 0, ?, ?, ?, ?)",
+      [mReq.patient_id, doctor_id, organ_id, org_id]
+    );
+
+    await conn.commit();
+    res.json({ message: 'Organ successfully assigned' });
+  } catch(err) {
+    await conn.rollback();
+    console.error(err);
+    res.status(500).json({ error: err.message || 'Server error' });
+  } finally {
+    conn.release();
+  }
+});
+
+export default router;
