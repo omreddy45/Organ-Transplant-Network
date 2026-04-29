@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { api } from "@/lib/api";
 
-export type Role = "patient" | "donor" | "doctor" | "organization" | "head";
+export type Role = "patient" | "donor" | "doctor" | "organization" | "head" | "admin";
 
 export interface AuthUser {
   id: string;
@@ -38,6 +39,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    // Notify backend so logout_time is recorded in Sessions table
+    if (user?.sessionId) {
+      api.auth.logout(user.sessionId).catch(() => {});
+    }
     localStorage.removeItem(STORAGE_KEY);
     setUser(null);
   };

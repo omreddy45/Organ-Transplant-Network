@@ -24,6 +24,7 @@ const DonorDashboard = () => {
   const [donateOpen, setDonateOpen] = useState(false);
   const [donateForm, setDonateForm] = useState({ name: "Kidney", org_id: "" });
   const [organizations, setOrganizations] = useState<any[]>([]);
+  const [transplants, setTransplants] = useState<any[]>([]);
 
   const donorId = user?.roleId;
 
@@ -31,17 +32,19 @@ const DonorDashboard = () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const [orgRes, profRes, orgsRes, pledgesRes] = await Promise.all([
+      const [orgRes, profRes, orgsRes, pledgesRes, transRes] = await Promise.all([
         api.organs.list(),
         api.profile.get(Number(user.id)),
         api.organs.organizations(),
-        api.donors.listPledges({ donor_id: donorId })
+        api.donors.listPledges({ donor_id: donorId }),
+        api.transplants.list({ donor_id: String(donorId) })
       ]);
       const myDonations = donorId ? orgRes.filter((o: any) => o.donor_id === donorId) : [];
       setOrgans(myDonations);
       setPledges(pledgesRes);
       setProfile(profRes);
       setOrganizations(orgsRes);
+      setTransplants(transRes);
     } catch(err) {
       console.error(err);
     } finally {
@@ -266,8 +269,25 @@ const DonorDashboard = () => {
                       <StatusBadge status={o.availability_status} />
                     </div>
                     <div className="mt-2 text-xs text-muted-foreground">
-                      {o.availability_status === 'transplanted' && "✅ Successfully transplanted — you saved a life!"}
-                      {o.availability_status === 'reserved' && "🕐 Surgery scheduled — patient matched."}
+                      {o.availability_status === 'transplanted' && (() => {
+                        const t = transplants.find((tr: any) => tr.organ_id === o.organ_id);
+                        return t ? (
+                          <>
+                            ✅ Successfully transplanted — you saved a life!<br />
+                            <span className="text-foreground font-medium">Patient: {t.patient_name}</span>
+                            <span className="text-muted-foreground"> ({t.patient_email})</span>
+                          </>
+                        ) : "✅ Successfully transplanted — you saved a life!";
+                      })()}
+                      {o.availability_status === 'reserved' && (() => {
+                        const t = transplants.find((tr: any) => tr.organ_id === o.organ_id);
+                        return t ? (
+                          <>
+                            🕐 Surgery scheduled for <span className="text-foreground font-medium">{t.patient_name}</span>
+                            <span className="text-muted-foreground"> ({t.patient_email})</span>
+                          </>
+                        ) : "🕐 Surgery scheduled — patient matched.";
+                      })()}
                       {o.availability_status === 'available' && "⏳ Waiting for a compatible patient match."}
                     </div>
                   </div>

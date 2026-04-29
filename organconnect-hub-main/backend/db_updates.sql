@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS Match_Request (
     urgency_level VARCHAR(50) DEFAULT 'normal',
     status ENUM('pending', 'assigned', 'completed') DEFAULT 'pending',
     request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (patient_id) REFERENCES Patient(patient_id)
+    FOREIGN KEY (patient_id) REFERENCES Patient(patient_id) ON DELETE CASCADE
 );

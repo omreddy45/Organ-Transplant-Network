@@ -44,6 +44,7 @@ const HeadDashboard = () => {
   const [sortKey, setSortKey] = useState<"date" | "bill">("date");
   const [loading, setLoading] = useState(true);
   const [selectedDocInfo, setSelectedDocInfo] = useState<any>(null);
+  const [orgName, setOrgName] = useState<string>("");
 
   const orgId = user?.orgId;
 
@@ -54,17 +55,25 @@ const HeadDashboard = () => {
       fetch(`/api/doctors?org_id=${orgId}`).then(r => r.json()),
       fetch(`/api/transplants?org_id=${orgId}`).then(r => r.json()),
       fetch(`/api/transplants/analytics?org_id=${orgId}`).then(r => r.json()),
-    ]).then(([docRes, trRes, anRes]) => {
+      fetch(`/api/auth/org/${orgId}`).then(r => r.ok ? r.json() : { name: "" })
+    ]).then(([docRes, trRes, anRes, orgRes]) => {
       if (docRes.status === 'fulfilled') setDoctorList(docRes.value);
       if (trRes.status === 'fulfilled') setTransplantList(trRes.value);
       if (anRes.status === 'fulfilled') setAnalyticsData(anRes.value);
+      if (orgRes.status === 'fulfilled' && orgRes.value?.name) setOrgName(orgRes.value.name);
       setLoading(false);
     });
   }, [orgId]);
 
   const changeDoctorStatus = (id: number, status: DoctorAvailability) => { 
-    setDoctorList((arr) => arr.map((d) => d.doctor_id === id ? { ...d, availability_status: status } : d)); 
-    toast.success("Doctor status updated"); 
+    fetch(`/api/doctors/${id}/status`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ availability_status: status })
+    }).then(r => r.json()).then(data => {
+      if (data.error) throw new Error(data.error);
+      setDoctorList((arr) => arr.map((d) => d.doctor_id === id ? { ...d, availability_status: status } : d)); 
+      toast.success("Doctor status updated"); 
+    }).catch(e => toast.error(e.message));
   };
 
   const sortedTransplants = useMemo(() => {
@@ -81,14 +90,14 @@ const HeadDashboard = () => {
 
   if (loading) {
      return (
-       <DashboardLayout nav={nav} title="Head Dashboard" subtitle="Hospital analytics and doctor management">
+       <DashboardLayout nav={nav} title="Head Dashboard" subtitle={orgName || "Hospital analytics and doctor management"}>
          <div className="flex items-center justify-center p-20 text-muted-foreground animate-pulse">Loading analytics...</div>
        </DashboardLayout>
      );
   }
 
   return (
-    <DashboardLayout nav={nav} title="Head Dashboard" subtitle="Hospital analytics and doctor management">
+    <DashboardLayout nav={nav} title="Head Dashboard" subtitle={orgName || "Hospital analytics and doctor management"}>
       {/* ── OVERVIEW ── */}
       {section === "overview" && (
         <div className="space-y-6 animate-fade-in">

@@ -109,6 +109,12 @@ export const api = {
         `/match_requests/${id}/assign`,
         { method: 'POST', body: JSON.stringify(data) }
       ),
+
+    reject: (id: number) =>
+      request<{ message: string }>(
+        `/match_requests/${id}/reject`,
+        { method: 'POST' }
+      ),
   },
 
   // ───── Donors ─────
@@ -122,6 +128,12 @@ export const api = {
     approve: (id: number) =>
       request<{ message: string }>(
         `/donors/${id}/approve`,
+        { method: 'PUT' }
+      ),
+
+    reject: (id: number) =>
+      request<{ message: string }>(
+        `/donors/${id}/reject`,
         { method: 'PUT' }
       ),
 
@@ -139,6 +151,12 @@ export const api = {
     approvePledge: (id: number) =>
       request<{ message: string }>(
         `/donors/pledge/${id}/approve`,
+        { method: 'POST' }
+      ),
+
+    rejectPledge: (id: number) =>
+      request<{ message: string }>(
+        `/donors/pledge/${id}/reject`,
         { method: 'POST' }
       ),
   },
@@ -200,6 +218,9 @@ export const api = {
       const qs = params ? '?' + new URLSearchParams(params).toString() : '';
       return request<any[]>(`/patients${qs}`);
     },
+
+    schedule: (id: number) =>
+      request<any[]>(`/patients/${id}/schedule`),
   },
 
   // ───── Medical History ─────
@@ -244,5 +265,57 @@ export const api = {
         `/profile?user_id=${user_id}`,
         { method: 'DELETE' }
       ),
+  },
+
+  // ───── Sessions ─────
+
+  sessions: {
+    list: (org_id: number) =>
+      request<{ sessions: any[]; stats: { total: number; active: number; uniqueUsers: number } }>(
+        `/sessions?org_id=${org_id}`
+      ),
+  },
+
+  // ───── Admin ─────
+
+  admin: {
+    stats: () =>
+      request<any>('/admin/stats'),
+
+    users: (params?: { role?: string; search?: string }) => {
+      const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+      return request<any[]>(`/admin/users${qs}`);
+    },
+
+    deleteUser: (id: number) =>
+      request<{ message: string }>(
+        `/admin/users/${id}`,
+        { method: 'DELETE' }
+      ),
+
+    organizations: () =>
+      request<any[]>('/admin/organizations'),
+
+    auditLog: () =>
+      request<any[]>('/admin/audit-log'),
+
+    restoreAuditRecord: (id: number) =>
+      request<{ message: string }>(`/admin/audit-log/${id}/restore`, {
+        method: 'POST',
+      }),
+
+    organLimits: () =>
+      request<any[]>('/admin/organ-limits'),
+
+    addOrganLimit: (data: { organ_name: string; max_donations: number; required_specialization: string; description?: string }) =>
+      request<{ message: string }>('/admin/organ-limits', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+      
+    deleteOrganLimit: (name: string) =>
+      request<{ message: string }>(`/admin/organ-limits/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+      }),
   },
 };

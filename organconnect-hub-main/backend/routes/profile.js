@@ -64,7 +64,7 @@ router.get('/', async (req, res) => {
     return res.json({ ...user, ...profile, phones });
   } catch (err) {
     console.error('GET /api/profile error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to load profile: ${err.message}` });
   }
 });
 
@@ -186,7 +186,10 @@ router.put('/update', async (req, res) => {
     return res.json({ message: 'Profile updated' });
   } catch (err) {
     console.error('PUT /api/profile/update error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'This email is already in use by another account.' });
+    }
+    return res.status(500).json({ error: `Failed to update profile: ${err.message}` });
   }
 });
 
@@ -197,7 +200,7 @@ router.put('/password', async (req, res) => {
   const { user_id, currentPassword, newPassword } = req.body;
 
   if (!user_id || !currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'All fields are required' });
+    return res.status(400).json({ error: 'Please provide your current password and new password.' });
   }
 
   try {
@@ -213,7 +216,7 @@ router.put('/password', async (req, res) => {
     return res.json({ message: 'Password updated' });
   } catch (err) {
     console.error('PUT /api/profile/password error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to change password: ${err.message}` });
   }
 });
 
@@ -228,12 +231,20 @@ router.delete('/', async (req, res) => {
   }
 
   try {
+    // Check if user exists first
+    const [check] = await db.query('SELECT role FROM Users WHERE user_id = ?', [user_id]);
+    if (!check.length) {
+      return res.status(404).json({ error: 'Account not found. It may have already been deleted.' });
+    }
     // CASCADE in schema handles child rows
     await db.query('DELETE FROM Users WHERE user_id = ?', [user_id]);
-    return res.json({ message: 'Account deleted' });
+    return res.json({ message: `Account (${check[0].role}) deleted successfully. All related records have been removed and backed up in the audit log.` });
   } catch (err) {
     console.error('DELETE /api/profile error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    if (err.code === 'ER_ROW_IS_REFERENCED_2') {
+      return res.status(409).json({ error: 'Cannot delete account: it has active transplant records. Please contact the admin.' });
+    }
+    return res.status(500).json({ error: `Failed to delete account: ${err.message}` });
   }
 });
 

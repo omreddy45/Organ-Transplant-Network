@@ -11,6 +11,10 @@ import patientRoutes from './routes/patients.js';
 import medicalHistoryRoutes from './routes/medicalHistory.js';
 import matchRequestRoutes from './routes/match_requests.js';
 import donorRoutes from './routes/donors.js';
+import sessionRoutes from './routes/sessions.js';
+import adminRoutes from './routes/admin.js';
+import bcrypt from 'bcryptjs';
+import db from './db.js';
 
 dotenv.config();
 
@@ -37,6 +41,8 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/medical-history', medicalHistoryRoutes);
 app.use('/api/match_requests', matchRequestRoutes);
 app.use('/api/donors', donorRoutes);
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ───── Health check ─────
 app.get('/api/health', (_req, res) => {
@@ -54,7 +60,26 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// ───── Seed admin account if not exists ─────
+async function seedAdmin() {
+  try {
+    const [rows] = await db.query("SELECT user_id FROM Users WHERE role = 'admin' LIMIT 1");
+    if (rows.length === 0) {
+      const hash = await bcrypt.hash('admin@gmail.com', 10);
+      await db.query(
+        "INSERT INTO Users (username, email, password_hash, role) VALUES ('admin', 'admin@gmail.com', ?, 'admin')",
+        [hash]
+      );
+      console.log('🔑 Admin account seeded: admin@gmail.com / admin@gmail.com');
+    }
+  } catch (err) {
+    // Table might not exist yet — skip silently
+    console.log('⚠️  Admin seed skipped (run CP.sql first):', err.message);
+  }
+}
+
 // ───── Start ─────
 app.listen(PORT, () => {
   console.log(`\n🚀 OrganConnect API running on http://localhost:${PORT}\n`);
+  seedAdmin();
 });

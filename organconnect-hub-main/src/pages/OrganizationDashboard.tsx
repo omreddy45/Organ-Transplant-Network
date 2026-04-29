@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Home, Database, Stethoscope, Activity, User, Plus, ShieldCheck, Users, Heart, Trash2, Pencil,
+  Home, Database, Stethoscope, Activity, User, Plus, ShieldCheck, Users, Heart, Trash2, Pencil, Clock, Eye, EyeOff
 } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend,
@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 
 import { api } from "@/lib/api";
 
-type Section = "overview" | "inventory" | "accounts" | "billing" | "donors" | "matchRequests";
+type Section = "overview" | "inventory" | "accounts" | "billing" | "donors" | "matchRequests" | "sessions";
 
 const PIE_COLORS = [
   "hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--success))",
@@ -58,6 +58,8 @@ const OrganizationDashboard = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Organ | null>(null);
   const [doctorList, setDoctorList] = useState<any[]>([]);
+  const [showDocPwd, setShowDocPwd] = useState(false);
+  const [organLimits, setOrganLimits] = useState<any[]>([]);
   const [transplantList, setTransplantList] = useState<any[]>([]);
   const [analyticsData, setAnalyticsData] = useState<any>({ monthly: [], mix: [], growth: [] });
   const [sortKey, setSortKey] = useState<"date" | "bill">("date");
@@ -66,22 +68,13 @@ const OrganizationDashboard = () => {
   const [pendingDonors, setPendingDonors] = useState<any[]>([]);
   const [pendingPledges, setPendingPledges] = useState<any[]>([]);
   const [matchRequests, setMatchRequests] = useState<any[]>([]);
+  const [sessionData, setSessionData] = useState<{ sessions: any[]; stats: { total: number; active: number; uniqueUsers: number } }>({ sessions: [], stats: { total: 0, active: 0, uniqueUsers: 0 } });
 
   const filterDoctorsByOrgan = (organ: string, docList: any[]) => {
-    return docList.filter(d => {
-      const o = organ.toLowerCase();
-      const s = String(d.specialization).toLowerCase();
-      if (o === 'kidney' && s.includes('nephrolog')) return true;
-      if (o === 'liver' && s.includes('hepatolog')) return true;
-      if (o === 'heart' && s.includes('cardiolog')) return true;
-      if (o === 'lung' && s.includes('pulmonolog')) return true;
-      if (o === 'pancreas' && s.includes('endocrinolog')) return true;
-      if (o === 'cornea' && s.includes('ophthalmolog')) return true;
-      if (o === 'bone marrow' && s.includes('hematolog')) return true;
-      if (o === 'skin' && s.includes('dermatolog')) return true;
-      if (o === 'brain' && s.includes('neurolog')) return true;
-      return s.includes('surgeon'); // fallback
-    });
+    const limit = organLimits.find(l => String(l.organ_name).toLowerCase() === organ.toLowerCase());
+    if (!limit) return docList; // fallback
+    const reqSpec = String(limit.required_specialization).toLowerCase();
+    return docList.filter(d => String(d.specialization).toLowerCase() === reqSpec && d.availability_status === 'available');
   };
 
   // Form state for Organ
@@ -108,8 +101,9 @@ const OrganizationDashboard = () => {
       fetch(`/api/auth/head/${orgId}`).then(r => r.ok ? r.json() : null),
       api.donors.list({ status: "pending" }),
       api.donors.listPledges({ org_id: orgId }),
-      api.matchRequests.list({ status: "pending" })
-    ]).then(([invRes, docRes, trRes, anRes, headRes, donRes, plRes, mrRes]) => {
+      api.matchRequests.list({ status: "pending" }),
+      api.admin.organLimits()
+    ]).then(([invRes, docRes, trRes, anRes, headRes, donRes, plRes, mrRes, limitsRes]) => {
       if (invRes.status === 'fulfilled') setInventory(invRes.value);
       if (docRes.status === 'fulfilled') setDoctorList(docRes.value);
       if (trRes.status === 'fulfilled') setTransplantList(trRes.value);
@@ -118,6 +112,9 @@ const OrganizationDashboard = () => {
       if (donRes.status === 'fulfilled') setPendingDonors(donRes.value);
       if (plRes.status === 'fulfilled') setPendingPledges(plRes.value.filter((p: any) => p.status === 'pending'));
       if (mrRes.status === 'fulfilled') setMatchRequests(mrRes.value);
+      if (limitsRes.status === 'fulfilled') setOrganLimits(limitsRes.value);
+      // Fetch session history
+      api.sessions.list(orgId as number).then(setSessionData).catch(() => {});
       setLoading(false);
     });
   }, [orgId]);
@@ -130,6 +127,15 @@ const OrganizationDashboard = () => {
   };
   const submitOrgan = () => {
     if (!orgId) return;
+    
+    // Check doctor availability
+    const availableDocs = filterDoctorsByOrgan(formName, doctorList);
+    if (availableDocs.length === 0) {
+      const limit = organLimits.find(l => String(l.organ_name).toLowerCase() === formName.toLowerCase());
+      const reqSpec = limit ? limit.required_specialization : 'a specialist';
+      return toast.error(`Cannot add ${formName}. You need a doctor with specialization: ${reqSpec}.`);
+    }
+
     if (editing) {
       fetch(`/api/organs/${editing.organ_id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -161,7 +167,30 @@ const OrganizationDashboard = () => {
       toast.success("Organ removed");
     });
   };
-  const changeDoctorStatus = (id: number, status: DoctorAvailability) => { setDoctorList((arr) => arr.map((d) => d.doctor_id === id ? { ...d, availability_status: status } : d)); toast.success("Doctor status updated"); };
+  const changeDoctorStatus = (id: number, status: DoctorAvailability) => {
+    fetch(`/api/doctors/${id}/status`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ availability_status: status })
+    }).then(r => r.json()).then(data => {
+      if (data.error) throw new Error(data.error);
+      setDoctorList((arr) => arr.map((d) => d.doctor_id === id ? { ...d, availability_status: status } : d));
+      toast.success("Doctor status updated");
+    }).catch(e => toast.error(e.message));
+  };
+  const removeDoctor = (id: number) => {
+    fetch(`/api/doctors/${id}`, { method: 'DELETE' }).then(r => r.json()).then(data => {
+      if (data.error) throw new Error(data.error);
+      setDoctorList((arr) => arr.filter(d => d.doctor_id !== id));
+      toast.success("Doctor removed from organization");
+    }).catch(e => toast.error(e.message));
+  };
+  const removeHead = () => {
+    fetch(`/api/auth/head/${orgId}`, { method: 'DELETE' }).then(r => r.json()).then(data => {
+      if (data.error) throw new Error(data.error);
+      setHeadName(null);
+      toast.success("Head account removed");
+    }).catch(e => toast.error(e.message));
+  };
 
   const submitTransplantUpdate = () => {
     if (!editingTransplant) return;
@@ -196,6 +225,7 @@ const OrganizationDashboard = () => {
     { label: "Inventory", to: "/dashboard/organization", icon: Database, onClick: () => setSection("inventory") },
     { label: "Accounts", to: "/dashboard/organization", icon: Users, onClick: () => setSection("accounts") },
     { label: "Transplants", to: "/dashboard/organization", icon: Activity, onClick: () => setSection("billing") },
+    { label: "Session History", to: "/dashboard/organization", icon: Clock, onClick: () => setSection("sessions") },
   ];
 
   return (
@@ -215,7 +245,7 @@ const OrganizationDashboard = () => {
             <button onClick={() => setSection("donors")} className="glass rounded-2xl p-5 text-left hover-lift">
               <ShieldCheck className="text-primary mb-2" size={22} />
               <div className="font-semibold">Pending Verifications</div>
-              <div className="text-xs text-muted-foreground mt-1">{pendingDonors.length} donors · {pendingPledges.length} pledges</div>
+              <div className="text-xs text-muted-foreground mt-1">{pendingPledges.length} pledges</div>
             </button>
             <button onClick={() => setSection("matchRequests")} className="glass rounded-2xl p-5 text-left hover-lift">
               <Activity className="text-primary mb-2" size={22} />
@@ -248,55 +278,14 @@ const OrganizationDashboard = () => {
             <button onClick={() => setSection("overview")} className="text-sm text-muted-foreground hover:text-foreground">← Back</button>
             <h2 className="text-xl font-bold">Pending Verifications</h2>
           </div>
-          
-          <div className="space-y-2">
-            <h3 className="font-semibold text-muted-foreground px-1">1. New Donor Accounts</h3>
-            <div className="glass-strong rounded-2xl p-4 overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Donor ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingDonors.map((d) => (
-                    <TableRow key={d.donor_id}>
-                      <TableCell className="font-medium">#{d.donor_id}</TableCell>
-                      <TableCell>{d.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{d.email}</TableCell>
-                      <TableCell><StatusBadge status={d.donor_status} /></TableCell>
-                      <TableCell className="text-right">
-                        <Button size="sm" className="rounded-xl bg-success hover:opacity-90" onClick={() => {
-                          api.donors.approve(d.donor_id).then(() => {
-                            setPendingDonors(prev => prev.filter(x => x.donor_id !== d.donor_id));
-                            toast.success('Donor officially approved for hospital use!');
-                          }).catch(e => toast.error(e.message));
-                        }}>Approve Donor</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {pendingDonors.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground h-24">No pending donor accounts.</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
 
           <div className="space-y-2">
-            <h3 className="font-semibold text-muted-foreground px-1">2. Organ Pledges</h3>
             <div className="glass-strong rounded-2xl p-4 overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Pledge ID</TableHead>
                     <TableHead>Donor Name</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead>Organ Pledged</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -304,18 +293,29 @@ const OrganizationDashboard = () => {
                 <TableBody>
                   {pendingPledges.map((p) => (
                     <TableRow key={p.pledge_id}>
-                      <TableCell className="font-medium">#{p.pledge_id}</TableCell>
-                      <TableCell>{p.donor_name} (ID: {p.donor_id})</TableCell>
+                      <TableCell className="font-medium">{p.donor_name}</TableCell>
+                      <TableCell className="text-muted-foreground">{p.donor_email}</TableCell>
                       <TableCell className="font-semibold text-primary">{p.organ_type}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2">
                         <Button size="sm" className="rounded-xl bg-gradient-primary hover:opacity-90" onClick={() => {
+                          const availableDocs = filterDoctorsByOrgan(p.organ_type, doctorList);
+                          if (availableDocs.length === 0) {
+                            const limit = organLimits.find(l => String(l.organ_name).toLowerCase() === String(p.organ_type).toLowerCase());
+                            const reqSpec = limit ? limit.required_specialization : 'a specialist';
+                            return toast.error(`Cannot verify ${p.organ_type}. You need a doctor with specialization: ${reqSpec}.`);
+                          }
                           api.donors.approvePledge(p.pledge_id).then(() => {
                             setPendingPledges(prev => prev.filter(x => x.pledge_id !== p.pledge_id));
-                            // Refresh inventory visually
                             fetch(`/api/organs/inventory?org_id=${orgId}`).then(r => r.json()).then(setInventory);
                             toast.success('Pledge Verified! Organ added directly into your hospital Inventory.');
                           }).catch(e => toast.error(e.message));
                         }}>Verify & Add Organ</Button>
+                        <Button size="sm" variant="outline" className="rounded-xl border-danger/40 text-danger hover:bg-danger hover:text-white" onClick={() => {
+                          api.donors.rejectPledge(p.pledge_id).then(() => {
+                            setPendingPledges(prev => prev.filter(x => x.pledge_id !== p.pledge_id));
+                            toast.success('Organ pledge rejected.');
+                          }).catch(e => toast.error(e.message));
+                        }}>Reject</Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -358,60 +358,55 @@ const OrganizationDashboard = () => {
                     <TableCell className="font-semibold">{r.organ_type}</TableCell>
                     <TableCell><StatusBadge status={r.urgency_level} /></TableCell>
                     <TableCell><StatusBadge status={r.status} /></TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right space-x-2">
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button size="sm" className="rounded-xl">Assign Organ</Button>
+                          <Button size="sm" className="rounded-xl bg-gradient-primary hover:opacity-90">Assign Organ</Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-80 rounded-2xl glass-strong border border-border/50 p-4">
                           <h4 className="font-semibold mb-3">Assign to {r.patient_name}</h4>
                           <div className="space-y-3">
                             <div className="space-y-1">
-                              <Label>Select Organ</Label>
-                              <Select onValueChange={(val) => r._selectedOrgan = val}>
-                                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Matching inventory..." /></SelectTrigger>
-                                <SelectContent>
-                                  {inventory.filter(o => o.availability_status === "available" && o.name === r.organ_type).map(o => (
-                                    <SelectItem key={o.organ_id} value={o.organ_id.toString()}>ID {o.organ_id} (Donor {o.donor_id})</SelectItem>
-                                  ))}
-                                  {inventory.filter(o => o.availability_status === "available" && o.name === r.organ_type).length === 0 && (
-                                    <SelectItem value="none" disabled>No available matching organs</SelectItem>
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1">
                               <Label>Assign Surgeon</Label>
                               <Select onValueChange={(val) => r._selectedDoctor = val}>
                                 <SelectTrigger className="rounded-xl"><SelectValue placeholder="Choose doctor..." /></SelectTrigger>
                                 <SelectContent>
-                                  {filterDoctorsByOrgan(r.organ_type, doctorList).map(d => (
+                                  {filterDoctorsByOrgan(r.organ_type, doctorList).filter((d: any) => d.availability_status === 'available').map((d: any) => (
                                     <SelectItem key={d.doctor_id} value={d.doctor_id.toString()}>
                                       {d.name.startsWith('Dr.') ? d.name : `Dr. ${d.name}`} ({d.specialization})
                                     </SelectItem>
                                   ))}
-                                  {filterDoctorsByOrgan(r.organ_type, doctorList).length === 0 && (
-                                    <SelectItem value="none" disabled>No specialized surgeons found</SelectItem>
+                                  {filterDoctorsByOrgan(r.organ_type, doctorList).filter((d: any) => d.availability_status === 'available').length === 0 && (
+                                    <SelectItem value="none" disabled>No available specialized surgeons</SelectItem>
                                   )}
                                 </SelectContent>
                               </Select>
                             </div>
                             <Button className="w-full rounded-xl bg-gradient-primary mt-2" onClick={() => {
-                              if (!r._selectedOrgan || !r._selectedDoctor) return toast.error("Select both Organ and Doctor");
+                              if (!r._selectedDoctor) return toast.error("Please select a surgeon");
+                              const autoOrgan = inventory.find(o => o.availability_status === "available" && o.name === r.organ_type);
+                              if (!autoOrgan) return toast.error("No available organs of this type!");
+                              
                               api.matchRequests.assign(r.request_id, {
-                                organ_id: Number(r._selectedOrgan),
+                                organ_id: autoOrgan.organ_id,
                                 doctor_id: Number(r._selectedDoctor),
                                 org_id: orgId as number
                               }).then(() => {
                                 setMatchRequests(prev => prev.filter(x => x.request_id !== r.request_id));
-                                setInventory(prev => prev.map(o => o.organ_id === Number(r._selectedOrgan) ? {...o, availability_status: "reserved" as any} : o));
+                                setInventory(prev => prev.map(o => o.organ_id === autoOrgan.organ_id ? {...o, availability_status: "reserved" as any} : o));
                                 fetch(`/api/transplants?org_id=${orgId}`).then(r => r.json()).then(setTransplantList);
-                                toast.success("Organ successfully assigned to patient request! Procedure scheduled.");
+                                toast.success("Organ successfully assigned to patient! Procedure scheduled.");
                               }).catch(e => toast.error(e.message));
                             }}>Confirm Assignment</Button>
                           </div>
                         </PopoverContent>
                       </Popover>
+                      <Button size="sm" variant="outline" className="rounded-xl border-danger/40 text-danger hover:bg-danger hover:text-white" onClick={() => {
+                        api.matchRequests.reject(r.request_id).then(() => {
+                          setMatchRequests(prev => prev.filter(x => x.request_id !== r.request_id));
+                          toast.success('Patient match request rejected.');
+                        }).catch(e => toast.error(e.message));
+                      }}>Reject</Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -445,17 +440,17 @@ const OrganizationDashboard = () => {
                   <TableHead>Organ</TableHead>
                   <TableHead>Qty</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Donor ID</TableHead>
+                  <TableHead>Donor Name</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inventory.map((o) => (
+                {inventory.map((o: any) => (
                   <TableRow key={o.organ_id}>
                     <TableCell className="font-medium">{o.name}</TableCell>
                     <TableCell>{o.quantity}</TableCell>
                     <TableCell><StatusBadge status={o.availability_status} /></TableCell>
-                    <TableCell className="text-muted-foreground">{o.donor_id ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{o.donor_name || o.donor_id || "—"}</TableCell>
                     <TableCell className="text-right space-x-1">
                       <Button size="sm" variant="ghost" className="rounded-xl" onClick={() => openEdit(o)}><Pencil size={14} /></Button>
                       <AlertDialog>
@@ -491,7 +486,10 @@ const OrganizationDashboard = () => {
                   <Label>Organ type</Label>
                   <Select value={formName} onValueChange={setFormName}>
                     <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>{ORGAN_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      {organLimits.map((l) => <SelectItem key={l.organ_name} value={l.organ_name}>{l.organ_name}</SelectItem>)}
+                      {organLimits.length === 0 && ORGAN_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
@@ -536,6 +534,23 @@ const OrganizationDashboard = () => {
                 <>
                   <p className="text-base font-semibold text-foreground">{headName?.startsWith('Dr.') ? headName : `Dr. ${headName}`}</p>
                   <p className="text-sm text-muted-foreground">Admin Head configuration is active.</p>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="outline" className="rounded-xl border-danger/40 text-danger hover:bg-danger hover:text-white">
+                        <Trash2 size={14} className="mr-1" /> Remove Head
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-2xl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove Head Account?</AlertDialogTitle>
+                        <AlertDialogDescription>This will permanently delete the head account. The head will no longer be able to log in.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                        <AlertDialogAction className="rounded-xl bg-danger text-white" onClick={removeHead}>Yes, Remove Head</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </>
               ) : (
                 <>
@@ -561,8 +576,32 @@ const OrganizationDashboard = () => {
                   <div className="space-y-4 mt-6">
                     <div className="space-y-2"><Label>Full Name</Label><Input id="doc-name" placeholder="Dr. Full Name" className="rounded-xl" /></div>
                     <div className="space-y-2"><Label>Email</Label><Input id="doc-email" type="email" placeholder="doctor@example.com" className="rounded-xl" /></div>
-                    <div className="space-y-2"><Label>Password</Label><Input id="doc-password" type="password" placeholder="Min 6 characters" className="rounded-xl" /></div>
-                    <div className="space-y-2"><Label>Specialization</Label><Input id="doc-spec" placeholder="e.g. Nephrology" className="rounded-xl" /></div>
+                    <div className="space-y-2">
+                      <Label>Password</Label>
+                      <div className="relative">
+                        <Input id="doc-password" type={showDocPwd ? "text" : "password"} placeholder="Min 6 characters" className="rounded-xl" />
+                        <button type="button" onClick={() => setShowDocPwd(!showDocPwd)} className="absolute right-3 top-[10px] text-muted-foreground hover:text-foreground">
+                          {showDocPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Specialization</Label>
+                      <Select onValueChange={(val) => {
+                         const input = document.getElementById('doc-spec') as HTMLInputElement;
+                         if (input) input.value = val;
+                      }}>
+                        <SelectTrigger className="rounded-xl w-full">
+                          <SelectValue placeholder="Select Specialization" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from(new Set(organLimits.map(l => l.required_specialization))).map((spec: any) => (
+                            <SelectItem key={spec} value={spec}>{spec}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <input type="hidden" id="doc-spec" />
+                    </div>
                     <div className="space-y-2"><Label>Phone Number</Label><Input id="doc-phone" placeholder="+91 9876543210" className="rounded-xl" /></div>
                   </div>
                   <SheetFooter className="mt-6">
@@ -575,9 +614,12 @@ const OrganizationDashboard = () => {
                       if (!nameEl?.value || !emailEl?.value || !pwdEl?.value || !specEl?.value) {
                          return toast.error('Please fill all required fields');
                       }
+                      if (!/^\S+@\S+\.\S+$/.test(emailEl.value)) {
+                         return toast.error('Please enter a valid email address');
+                      }
                       fetch('/api/auth/signup', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: nameEl.value, email: emailEl.value, password: pwdEl.value, role: 'doctor', specialization: specEl.value, phoneNumber: phoneEl.value || undefined, org_id: orgId })
+                        body: JSON.stringify({ name: nameEl.value, email: emailEl.value, password: pwdEl.value, role: 'doctor', specialization: specEl.value, phoneNumber: phoneEl.value || undefined, org_id: orgId, _orgCreated: true })
                       }).then(r => r.json()).then(data => {
                         if (data.error) throw new Error(data.error);
                         toast.success(`Doctor ${nameEl.value} account created!`);
@@ -602,10 +644,27 @@ const OrganizationDashboard = () => {
                         {initials(d.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="font-semibold text-sm truncate">{d.name}</div>
                       <div className="text-xs text-muted-foreground truncate">{d.specialization}</div>
                     </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="ghost" className="rounded-xl text-danger hover:text-danger shrink-0">
+                          <Trash2 size={14} />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="rounded-2xl">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remove {d.name}?</AlertDialogTitle>
+                          <AlertDialogDescription>This will permanently delete this doctor's account and all related records.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                          <AlertDialogAction className="rounded-xl bg-danger text-white" onClick={() => removeDoctor(d.doctor_id)}>Delete Doctor</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 ))}
               </div>
@@ -696,6 +755,89 @@ const OrganizationDashboard = () => {
               </SheetFooter>
             </SheetContent>
           </Sheet>
+        </div>
+      )}
+      {/* ── SESSION HISTORY ── */}
+      {section === "sessions" && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center gap-2 mb-2">
+            <button onClick={() => setSection("overview")} className="text-sm text-muted-foreground hover:text-foreground">← Back</button>
+            <h2 className="text-xl font-bold">Session History</h2>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard label="Active Sessions" value={sessionData.stats.active} icon={Activity} accent="success" hint="Currently logged in" />
+            <StatCard label="Total Logins" value={sessionData.stats.total} icon={Clock} accent="primary" hint="Last 100 sessions" />
+            <StatCard label="Unique Users" value={sessionData.stats.uniqueUsers} icon={Users} accent="accent" hint="Who logged in" />
+          </div>
+
+          {/* Sessions table */}
+          <div className="glass-strong rounded-2xl p-4 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Login Time</TableHead>
+                  <TableHead>Logout Time</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sessionData.sessions.length > 0 ? sessionData.sessions.map((s) => {
+                  const loginDate = new Date(s.login_time);
+                  const logoutDate = s.logout_time ? new Date(s.logout_time) : null;
+                  const durationMin = s.duration_minutes || 0;
+                  const hours = Math.floor(durationMin / 60);
+                  const mins = durationMin % 60;
+                  const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+                  return (
+                    <TableRow key={s.session_id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-7 w-7">
+                            <AvatarFallback className="bg-gradient-primary text-primary-foreground text-[10px] font-semibold">
+                              {initials(s.display_name || s.username)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium text-sm">{s.display_name || s.username}</div>
+                            <div className="text-xs text-muted-foreground">{s.email}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="rounded-xl capitalize text-xs">{s.role}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {loginDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}{' '}
+                        <span className="text-muted-foreground">{loginDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {logoutDate
+                          ? <>{logoutDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}{' '}
+                              <span className="text-muted-foreground">{logoutDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span></>
+                          : <span className="text-muted-foreground italic">—</span>}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{durationStr}</TableCell>
+                      <TableCell>
+                        {s.session_status === 'active'
+                          ? <Badge className="bg-success/20 text-success border-0 rounded-xl animate-pulse-dot">● Active</Badge>
+                          : <Badge variant="outline" className="rounded-xl text-muted-foreground">Ended</Badge>}
+                      </TableCell>
+                    </TableRow>
+                  );
+                }) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground h-24">No session records found. Sessions are recorded when users log in.</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
     </DashboardLayout>

@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
     res.json(rows);
   } catch(err) {
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: `Failed to load donors list: ${err.message}` });
   }
 });
 
@@ -30,14 +30,46 @@ router.put('/:id/approve', async (req, res) => {
     res.json({ message: 'Donor approved' });
   } catch(err) {
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: `Failed to approve donor: ${err.message}` });
   }
 });
 
-// Create pledge
+// Reject donor
+router.put('/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query("UPDATE Donor SET donor_status = 'rejected' WHERE donor_id = ?", [id]);
+    res.json({ message: 'Donor rejected' });
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ error: `Failed to reject donor: ${err.message}` });
+  }
+});
+
+// Create pledge — with biological organ limit check (Loophole #2 fix)
 router.post('/pledge', async (req, res) => {
   const { donor_id, org_id, organ_type } = req.body;
   try {
+    // Check biological organ donation limit
+    const [limitRows] = await db.query(
+      'SELECT max_donations FROM organ_limits WHERE organ_name = ?',
+      [organ_type]
+    );
+    const maxAllowed = limitRows.length > 0 ? limitRows[0].max_donations : 1;
+
+    // Count existing approved + pending pledges for this donor and organ type
+    const [countRows] = await db.query(
+      "SELECT COUNT(*) AS cnt FROM Donor_Pledge WHERE donor_id = ? AND organ_type = ? AND status IN ('approved', 'pending')",
+      [donor_id, organ_type]
+    );
+    const currentCount = countRows[0].cnt;
+
+    if (currentCount >= maxAllowed) {
+      return res.status(400).json({
+        error: `Donation limit reached. Humans can donate "${organ_type}" a maximum of ${maxAllowed} time(s). You already have ${currentCount} active/approved pledge(s).`
+      });
+    }
+
     const [result] = await db.query(
       'INSERT INTO Donor_Pledge (donor_id, org_id, organ_type, status) VALUES (?, ?, ?, "pending")',
       [donor_id, org_id, organ_type]
@@ -45,7 +77,10 @@ router.post('/pledge', async (req, res) => {
     res.json({ message: 'Pledge submitted', pledge_id: result.insertId });
   } catch(err) {
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    if (err.sqlState === '45000') {
+      return res.status(400).json({ error: err.message });
+    }
+    res.status(500).json({ error: `Failed to create pledge: ${err.message}` });
   }
 });
 
@@ -54,9 +89,10 @@ router.get('/pledges', async (req, res) => {
   const { org_id, donor_id } = req.query;
   try {
     let sql = `
-      SELECT p.*, d.name as donor_name, o.name as org_name 
+      SELECT p.*, d.name as donor_name, u.email as donor_email, o.name as org_name 
       FROM Donor_Pledge p 
       JOIN Donor d ON p.donor_id = d.donor_id
+      JOIN Users u ON d.user_id = u.user_id
       JOIN Organization o ON p.org_id = o.org_id
       WHERE 1=1
     `;
@@ -68,7 +104,7 @@ router.get('/pledges', async (req, res) => {
     res.json(rows);
   } catch(err) {
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: `Failed to load pledges: ${err.message}` });
   }
 });
 
@@ -83,10 +119,10 @@ router.post('/pledge/:id/approve', async (req, res) => {
     if (!rows.length) throw new Error("Pledge not found");
     const pl = rows[0];
 
-    // Check if donor is approved
+    // Automatically approve donor when their pledge is accepted
     const [dRows] = await conn.query("SELECT donor_status FROM Donor WHERE donor_id = ?", [pl.donor_id]);
     if (dRows.length && dRows[0].donor_status !== 'approved') {
-      throw new Error("Donor must be legally approved first before their pledge can enter the catalog.");
+      await conn.query("UPDATE Donor SET donor_status = 'approved' WHERE donor_id = ?", [pl.donor_id]);
     }
 
     await conn.query("UPDATE Donor_Pledge SET status = 'approved' WHERE pledge_id = ?", [id]);
@@ -105,6 +141,18 @@ router.post('/pledge/:id/approve', async (req, res) => {
     res.status(500).json({ error: err.message || 'Server error' });
   } finally {
     conn.release();
+  }
+});
+
+// Reject pledge
+router.post('/pledge/:id/reject', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query("UPDATE Donor_Pledge SET status = 'rejected' WHERE pledge_id = ?", [id]);
+    res.json({ message: 'Pledge rejected' });
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ error: `Failed to reject pledge: ${err.message}` });
   }
 });
 

@@ -9,14 +9,15 @@ import db from '../db.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router = Router();
 
-// Load approved orgs once on startup
-let approvedOrgs = [];
-try {
-  const filePath = join(__dirname, '..', 'data', 'approved_orgs.json');
-  approvedOrgs = JSON.parse(readFileSync(filePath, 'utf8'));
-  console.log(`✅ Loaded ${approvedOrgs.length} approved organizations`);
-} catch (err) {
-  console.error('⚠️ Could not load approved_orgs.json:', err.message);
+// Helper: load approved orgs fresh from disk (so edits take effect without restart)
+function loadApprovedOrgs() {
+  try {
+    const filePath = join(__dirname, '..', 'data', 'approved_orgs.json');
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch (err) {
+    console.error('⚠️ Could not load approved_orgs.json:', err.message);
+    return [];
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -42,11 +43,17 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Invalid role' });
     }
 
+    // Block public doctor signup — doctors must be created by organizations (Loophole #12)
+    if (role === 'doctor' && !req.body._orgCreated) {
+      return res.status(403).json({ error: 'Doctor accounts can only be created by organizations. Please ask your hospital to register you.' });
+    }
+
     // ── Organization validation: check license against approved list ──
     if (role === 'organization') {
       if (!license || !location) {
         return res.status(400).json({ error: 'License number and location are required for organizations' });
       }
+      const approvedOrgs = loadApprovedOrgs();
       const isApproved = approvedOrgs.some(
         (org) => org.license_number === license
       );
@@ -57,9 +64,15 @@ router.post('/signup', async (req, res) => {
       }
     }
 
-    // Check duplicate email
-    const [existing] = await conn.query('SELECT user_id FROM Users WHERE email = ?', [email]);
+    // Check duplicate email — with role-aware guidance (Loophole #3 fix)
+    const [existing] = await conn.query('SELECT user_id, role FROM Users WHERE email = ?', [email]);
     if (existing.length > 0) {
+      const existingRole = existing[0].role;
+      if (existingRole !== role) {
+        return res.status(409).json({
+          error: `This email is already registered as a "${existingRole}". To also register as a "${role}", please contact the system admin (admin@organconnect.com) to update your role.`
+        });
+      }
       return res.status(409).json({ error: 'An account with this email already exists' });
     }
 
@@ -167,7 +180,7 @@ router.post('/signup', async (req, res) => {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'Duplicate entry — email or username already exists' });
     }
-    return res.status(500).json({ error: err.message || 'Internal server error' });
+    return res.status(500).json({ error: err.message ? `Registration failed: ${err.message}` : 'Failed to register account. Please try again later.' });
   } finally {
     conn.release();
   }
@@ -188,12 +201,12 @@ router.post('/login', async (req, res) => {
     const user = rows[0];
 
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'No account found with this email address. Please check your email or sign up.' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Incorrect password. Please try again or reset your password.' });
     }
 
     // Get user's name + role-specific ID from their role table
@@ -202,7 +215,10 @@ router.post('/login', async (req, res) => {
     let orgId = null;
 
     try {
-      if (user.role === 'patient') {
+      if (user.role === 'admin') {
+        name = 'System Admin';
+        roleId = user.user_id;
+      } else if (user.role === 'patient') {
         const [p] = await db.query('SELECT patient_id, name FROM Patient WHERE user_id = ?', [user.user_id]);
         if (p.length) { name = p[0].name; roleId = p[0].patient_id; }
       } else if (user.role === 'donor') {
@@ -323,10 +339,51 @@ router.get('/head/:org_id', async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
+// GET /api/auth/org/:org_id
+// ──────────────────────────────────────────────
+router.get('/org/:org_id', async (req, res) => {
+  try {
+    const [o] = await db.query('SELECT name FROM Organization WHERE org_id = ?', [req.params.org_id]);
+    if (o.length > 0) return res.json(o[0]);
+    return res.status(404).json({ error: "Not found" });
+  } catch (err) {
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ──────────────────────────────────────────────
 // GET /api/auth/approved-orgs — Public list
 // ──────────────────────────────────────────────
 router.get('/approved-orgs', (_req, res) => {
-  return res.json(approvedOrgs);
+  return res.json(loadApprovedOrgs());
+});
+
+// ──────────────────────────────────────────────
+// DELETE /api/auth/head/:org_id — Remove organization head (Loophole #7)
+// ──────────────────────────────────────────────
+router.delete('/head/:org_id', async (req, res) => {
+  const { org_id } = req.params;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [heads] = await conn.query('SELECT user_id FROM Organization_Head WHERE org_id = ?', [org_id]);
+    if (!heads.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'No head found for this organization' });
+    }
+    for (const h of heads) {
+      await conn.query('DELETE FROM Organization_Head WHERE user_id = ?', [h.user_id]);
+      await conn.query('DELETE FROM Users WHERE user_id = ?', [h.user_id]);
+    }
+    await conn.commit();
+    return res.json({ message: 'Head account removed successfully' });
+  } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
+    console.error('DELETE head error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    conn.release();
+  }
 });
 
 export default router;

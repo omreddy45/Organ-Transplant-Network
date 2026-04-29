@@ -41,6 +41,7 @@ const PatientDashboard = () => {
   const [formOrganType, setFormOrganType] = useState("Kidney");
   const [formUrgency, setFormUrgency] = useState("normal");
   const [newRequestOpen, setNewRequestOpen] = useState(false);
+  const [schedule, setSchedule] = useState<any[]>([]);
 
   const patientId = user?.roleId;
 
@@ -51,12 +52,14 @@ const PatientDashboard = () => {
       api.transplants.list({ patient_id: String(patientId) }),
       api.medicalHistory.list(patientId),
       api.doctors.list(),
-      api.matchRequests.list({ patient_id: patientId })
-    ]).then(([tRes, hRes, dRes, mrRes]) => {
+      api.matchRequests.list({ patient_id: patientId }),
+      api.patients.schedule(patientId)
+    ]).then(([tRes, hRes, dRes, mrRes, schRes]) => {
       if (tRes.status === "fulfilled") setTransplants(tRes.value);
       if (hRes.status === "fulfilled") setHistory(hRes.value);
       if (dRes.status === "fulfilled") setDoctors(dRes.value);
       if (mrRes.status === "fulfilled") setMatchRequests(mrRes.value);
+      if (schRes.status === "fulfilled") setSchedule(schRes.value);
       setLoading(false);
     });
   }, [patientId]);
@@ -65,6 +68,11 @@ const PatientDashboard = () => {
     () => [...history].sort((a, b) => String(b.record_date).localeCompare(String(a.record_date))),
     [history],
   );
+
+  const filteredDoctors = useMemo(() => {
+    const allowedOrgs = new Set(transplants.map((t: any) => t.org_id).filter(Boolean));
+    return doctors.filter((d: any) => allowedOrgs.has(d.org_id));
+  }, [doctors, transplants]);
 
   const addRecord = async () => {
     if (!recordText.trim() || !patientId) return;
@@ -95,7 +103,14 @@ const PatientDashboard = () => {
     }
   };
 
-  const assignedDoctor = doctors[0];
+  const assignedDoctor = useMemo(() => {
+    if (transplants.length > 0) {
+      // transplants array is already ordered by date DESC from the API
+      const latestTransplant = transplants[0];
+      return doctors.find(d => d.doctor_id === latestTransplant.doctor_id) || filteredDoctors[0];
+    }
+    return filteredDoctors[0];
+  }, [transplants, doctors, filteredDoctors]);
 
   const nav: NavItem[] = [
     { label: "Overview", to: "/dashboard/patient", icon: Home, end: true, onClick: () => setSection("overview") },
@@ -142,6 +157,11 @@ const PatientDashboard = () => {
                   <div>
                     <div className="font-semibold">{assignedDoctor.name}</div>
                     <div className="text-xs text-muted-foreground">{assignedDoctor.specialization}</div>
+                    {assignedDoctor.phones && assignedDoctor.phones.length > 0 && (
+                      <div className="text-xs text-muted-foreground mt-0.5 border-t border-border/30 pt-0.5">
+                        📞 {assignedDoctor.phones.join(', ')}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -194,7 +214,7 @@ const PatientDashboard = () => {
             <button onClick={() => setSection("doctors")} className="glass rounded-2xl p-5 text-left hover-lift group">
               <Stethoscope className="text-primary mb-2" size={22} />
               <div className="font-semibold">My Doctors</div>
-              <div className="text-xs text-muted-foreground mt-1">{doctors.length} available</div>
+              <div className="text-xs text-muted-foreground mt-1">{filteredDoctors.length} available</div>
             </button>
             <button onClick={() => setSection("transplants")} className="glass rounded-2xl p-5 text-left hover-lift group">
               <Activity className="text-primary mb-2" size={22} />
@@ -227,6 +247,13 @@ const PatientDashboard = () => {
                       <div>
                         <div className="font-semibold">{t.organ_name} transplant</div>
                         <div className="text-xs text-muted-foreground mt-0.5">{format(new Date(t.transplant_date), "MMM d, yyyy")} · {t.doctor_name} · {t.organization_name}</div>
+                        {t.donor_name && (
+                          <div className="text-xs mt-1.5 px-2 py-1 rounded-lg bg-primary/5 border border-primary/20 inline-block">
+                            <span className="text-muted-foreground">Donated by: </span>
+                            <span className="font-medium text-foreground">{t.donor_name}</span>
+                            {t.donor_email && <span className="text-muted-foreground"> ({t.donor_email})</span>}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
                         <StatusBadge status={t.status} />
@@ -380,12 +407,12 @@ const PatientDashboard = () => {
         <div className="space-y-4 animate-fade-in">
           <div className="flex items-center gap-2 mb-2">
             <button onClick={() => setSection("overview")} className="text-sm text-muted-foreground hover:text-foreground">← Back</button>
-            <h2 className="text-xl font-bold">Available Doctors</h2>
+            <h2 className="text-xl font-bold">My Assigned Doctors</h2>
           </div>
-          {doctors.length === 0 ? (
+          {filteredDoctors.length === 0 ? (
             <div className="glass-strong rounded-2xl p-8 text-center text-muted-foreground">
               <Stethoscope className="mx-auto mb-3" size={32} />
-              <p>No doctors found in the system yet.</p>
+              <p>No doctors assigned yet. Complete a match request to be assigned to a hospital and doctor.</p>
             </div>
           ) : (
             <div className="overflow-x-auto glass-strong rounded-2xl p-4">
@@ -394,33 +421,59 @@ const PatientDashboard = () => {
                   <TableRow>
                     <TableHead>Doctor</TableHead>
                     <TableHead>Specialization</TableHead>
+                    <TableHead>Contact</TableHead>
                     <TableHead>Organization</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {doctors.map((d: any) => (
+                  {filteredDoctors.map((d: any) => (
                     <TableRow key={d.doctor_id}>
-                      <TableCell className="font-medium">{d.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{d.specialization}</TableCell>
-                      <TableCell className="text-muted-foreground">{d.organization_name || '—'}</TableCell>
-                      <TableCell><StatusBadge status={d.availability_status === "available" ? "available_doctor" : d.availability_status} /></TableCell>
-                      <TableCell className="text-right">
-                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => {
-                          fetch('/api/doctors/visit', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ doctor_id: d.doctor_id, patient_id: patientId, visit_date: new Date().toISOString().split('T')[0] })
-                          }).then(r => r.json()).then(data => {
-                            if (data.error) throw new Error(data.error);
-                            toast.success(`Visit booked with ${d.name.startsWith('Dr.') ? d.name : 'Dr. ' + d.name}`);
-                          }).catch(e => toast.error(e.message));
-                        }}>Book Visit</Button>
-                      </TableCell>
+                       <TableCell className="font-medium">{d.name}</TableCell>
+                       <TableCell className="text-muted-foreground">{d.specialization}</TableCell>
+                       <TableCell className="text-muted-foreground text-xs">{d.phones?.join(', ') || '—'}</TableCell>
+                       <TableCell className="text-muted-foreground">{d.organization_name || '—'}</TableCell>
+                       <TableCell><StatusBadge status={d.availability_status === "available" ? "available_doctor" : d.availability_status} /></TableCell>
+                       <TableCell className="text-right">
+                         <Button size="sm" variant="outline" className="rounded-xl" onClick={() => {
+                           // Set the visit date to next week for a manual booking
+                           const fd = new Date();
+                           fd.setDate(fd.getDate() + 7);
+                           fetch('/api/doctors/visit', {
+                             method: 'POST', headers: { 'Content-Type': 'application/json' },
+                             body: JSON.stringify({ doctor_id: d.doctor_id, patient_id: patientId, visit_date: fd.toISOString().split('T')[0] })
+                           }).then(r => r.json()).then(data => {
+                             if (data.error) throw new Error(data.error);
+                             toast.success(`Visit securely booked. Check your schedule.`);
+                           }).catch(e => toast.error(e.message));
+                         }}>Book Visit</Button>
+                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+
+          {/* Visits Timeline */}
+          {schedule.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-bold mb-3">Your Medical Visits</h3>
+              <div className="space-y-3">
+                {schedule.map((v: any, i: number) => (
+                  <div key={i} className="glass rounded-xl p-4 flex items-center justify-between border border-primary/20 bg-primary/5">
+                    <div>
+                      <div className="font-semibold text-primary">{v.doctor_name}</div>
+                      <div className="text-xs text-muted-foreground">{v.organization_name}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold">{format(new Date(v.visit_date), "MMM d, yyyy")}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">Consultation Visit</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

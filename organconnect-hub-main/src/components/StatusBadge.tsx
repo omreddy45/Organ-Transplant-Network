@@ -14,6 +14,7 @@ const map: Record<string, { label: string; color: string; pulse?: boolean }> = {
   available: { label: "Available", color: "bg-success/15 text-success border-success/30", pulse: true },
   reserved: { label: "Reserved", color: "bg-warning/15 text-warning border-warning/30" },
   transplanted: { label: "Transplanted", color: "bg-primary/15 text-primary border-primary/30" },
+  matched: { label: "Matched", color: "bg-primary/15 text-primary border-primary/30", pulse: true },
   available_doctor: { label: "Available", color: "bg-success/15 text-success border-success/30", pulse: true },
   busy: { label: "Busy", color: "bg-warning/15 text-warning border-warning/30" },
   on_leave: { label: "On Leave", color: "bg-muted text-muted-foreground border-border" },

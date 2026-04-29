@@ -22,7 +22,7 @@ router.get('/stats', async (_req, res) => {
     });
   } catch (err) {
     console.error('GET /api/organs/stats error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to load stats: ${err.message}` });
   }
 });
 
@@ -35,7 +35,7 @@ router.get('/organizations', async (_req, res) => {
     return res.json(rows);
   } catch (err) {
     console.error('GET /api/organs/organizations error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to load organizations: ${err.message}` });
   }
 });
 
@@ -48,10 +48,11 @@ router.get('/inventory', async (req, res) => {
   try {
     let sql = `
       SELECT o.organ_id, o.name, o.quantity, o.availability_status,
-             o.donor_id, o.org_id,
+             o.donor_id, d.name AS donor_name, o.org_id,
              org.name AS organization_name, org.location
       FROM Organ o
       JOIN Organization org ON o.org_id = org.org_id
+      LEFT JOIN Donor d ON o.donor_id = d.donor_id
     `;
     const params = [];
 
@@ -66,7 +67,7 @@ router.get('/inventory', async (req, res) => {
     return res.json(rows);
   } catch (err) {
     console.error('GET /api/organs/inventory error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to load inventory: ${err.message}` });
   }
 });
 
@@ -79,10 +80,11 @@ router.get('/', async (req, res) => {
   try {
     let sql = `
       SELECT o.organ_id, o.name, o.quantity, o.availability_status,
-             o.donor_id, o.org_id,
+             o.donor_id, d.name AS donor_name, o.org_id,
              org.name AS organization_name, org.location
       FROM Organ o
       JOIN Organization org ON o.org_id = org.org_id
+      LEFT JOIN Donor d ON o.donor_id = d.donor_id
       WHERE 1=1
     `;
     const params = [];
@@ -98,7 +100,7 @@ router.get('/', async (req, res) => {
     return res.json(rows);
   } catch (err) {
     console.error('GET /api/organs error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to load organ catalog: ${err.message}` });
   }
 });
 
@@ -110,7 +112,7 @@ router.post('/add', async (req, res) => {
 
   try {
     if (!name || !org_id) {
-      return res.status(400).json({ error: 'Organ name and org_id are required' });
+      return res.status(400).json({ error: 'Missing required fields: organ name and organization ID are required.' });
     }
 
     const [result] = await db.query(
@@ -124,7 +126,7 @@ router.post('/add', async (req, res) => {
     });
   } catch (err) {
     console.error('POST /api/organs/add error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to add organ: ${err.message}` });
   }
 });
 
@@ -145,7 +147,7 @@ router.put('/:id', async (req, res) => {
     if (donor_id !== undefined) { fields.push('donor_id = ?'); params.push(donor_id || null); }
 
     if (fields.length === 0) {
-      return res.status(400).json({ error: 'No fields to update' });
+      return res.status(400).json({ error: 'Please provide at least one field to update (name, quantity, status, or donor).' });
     }
 
     params.push(id);
@@ -154,7 +156,7 @@ router.put('/:id', async (req, res) => {
     return res.json({ message: 'Organ updated' });
   } catch (err) {
     console.error('PUT /api/organs/:id error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to update organ: ${err.message}` });
   }
 });
 
@@ -169,7 +171,10 @@ router.delete('/:id', async (req, res) => {
     return res.json({ message: 'Organ deleted' });
   } catch (err) {
     console.error('DELETE /api/organs/:id error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    if (err.code === 'ER_ROW_IS_REFERENCED_2') {
+      return res.status(409).json({ error: 'Cannot delete this organ: it is linked to an active transplant record. Complete or cancel the transplant first.' });
+    }
+    return res.status(500).json({ error: `Failed to delete organ: ${err.message}` });
   }
 });
 

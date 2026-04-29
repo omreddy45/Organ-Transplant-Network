@@ -1,6 +1,6 @@
 import { useState, KeyboardEvent, useEffect } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
-import { Home, User, Mail, Shield, Trash2, Save, Plus, X, ArrowLeft } from "lucide-react";
+import { Home, User, Mail, Shield, Trash2, Save, Plus, X, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { DashboardLayout, NavItem } from "@/components/dashboard/DashboardLayout";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,10 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: "Dashboard", to: "/dashboard/head", icon: Home },
     { label: "My Profile", to: "/profile", icon: User },
   ],
+  admin: [
+    { label: "Dashboard", to: "/dashboard/admin", icon: Home },
+    { label: "My Profile", to: "/profile", icon: User },
+  ],
 };
 
 const initials = (name: string) =>
@@ -50,27 +54,62 @@ const Profile = () => {
 
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
-  const [city, setCity] = useState("Delhi");
-  const [state, setState] = useState("Delhi");
-  const [street, setStreet] = useState("12 Lotus Avenue");
-  const [insurance, setInsurance] = useState("INS-100137");
-  const [reason, setReason] = useState("Saving lives is the greatest legacy.");
-  const [specialization, setSpecialization] = useState("Nephrology");
-  const [orgName, setOrgName] = useState("AIIMS Delhi");
-  const [license, setLicense] = useState("LIC-2024-001");
-  const [location, setLocation] = useState("Delhi");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [street, setStreet] = useState("");
+  const [insurance, setInsurance] = useState("");
+  const [reason, setReason] = useState("");
+  const [specialization, setSpecialization] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [license, setLicense] = useState("");
+  const [location, setLocation] = useState("");
 
-  const [phones, setPhones] = useState<string[]>(["+91 9876543210"]);
+  const [phones, setPhones] = useState<string[]>([]);
   const [phoneInput, setPhoneInput] = useState("");
 
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
+  
+  // Password visibility state
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [showHeadPwd, setShowHeadPwd] = useState(false);
   const [headData, setHeadData] = useState<any>(null);
 
-  const memberSince = "August 2024";
+  const [memberSince, setMemberSince] = useState("Loading...");
 
   useEffect(() => {
+    if (!user) return;
+
+    fetch(`/api/profile?user_id=${user.id}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) {
+          if (data.created_at) {
+             const d = new Date(data.created_at);
+             setMemberSince(d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+          } else {
+             setMemberSince("Unknown");
+          }
+          setName(data.name || data.username || "");
+          setEmail(data.email || "");
+          if (data.city) setCity(data.city);
+          if (data.state) setState(data.state);
+          if (data.street) setStreet(data.street);
+          if (data.medical_insurance) setInsurance(data.medical_insurance);
+          if (data.donation_reason) setReason(data.donation_reason);
+          if (data.specialization) setSpecialization(data.specialization);
+          if (data.organization_name) setOrgName(data.organization_name);
+          else if (data.role === "organization") setOrgName(data.name || "");
+          if (data.license_number) setLicense(data.license_number);
+          if (data.location) setLocation(data.location);
+          if (data.phones) setPhones(data.phones);
+        }
+      })
+      .catch(err => console.error("Error fetching profile:", err));
+
     if (user?.role === "organization") {
       const oid = user.orgId || user.roleId;
       fetch(`/api/auth/head/${oid}`).then(r => r.ok ? r.json() : null).then(d => {
@@ -93,20 +132,63 @@ const Profile = () => {
 
   const removePhone = (p: string) => setPhones((arr) => arr.filter((x) => x !== p));
 
-  const saveProfile = () => toast.success("Profile saved");
+  const saveProfile = () => {
+    if (!user) return;
+    const payload: any = { user_id: user.id, name, email, phones };
+    if (user.role === 'patient') {
+      Object.assign(payload, { city, state, street, insurance });
+    } else if (user.role === 'donor') {
+      Object.assign(payload, { reason });
+    } else if (user.role === 'doctor') {
+      Object.assign(payload, { specialization });
+    } else if (user.role === 'organization') {
+      Object.assign(payload, { location, license, orgName });
+    }
+
+    fetch('/api/profile/update', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.error) throw new Error(res.error);
+        toast.success("Profile saved");
+      })
+      .catch(err => toast.error(err.message));
+  };
 
   const changePassword = () => {
     if (!currentPwd || !newPwd) return toast.error("Fill all password fields");
     if (newPwd !== confirmPwd) return toast.error("New passwords don't match");
     if (newPwd.length < 8) return toast.error("Password must be 8+ characters");
-    setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
-    toast.success("Password updated");
+    
+    fetch('/api/profile/password', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user?.id, currentPassword: currentPwd, newPassword: newPwd })
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.error) throw new Error(res.error);
+        setCurrentPwd(""); setNewPwd(""); setConfirmPwd("");
+        toast.success("Password updated");
+      })
+      .catch(err => toast.error(err.message || "Failed to update password"));
   };
 
-  const deleteAccount = () => {
-    logout();
-    toast.success("Account deleted");
-    navigate("/");
+  const deleteAccount = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`/api/profile?user_id=${user.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      logout();
+      toast.success("Account deleted permanently");
+      navigate("/");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete account");
+    }
   };
 
   if (!user) return <Navigate to="/login" replace />;
@@ -196,7 +278,15 @@ const Profile = () => {
                     <div className="space-y-4 mt-6">
                       <div className="space-y-2"><Label>Full Name</Label><Input id="head-name" placeholder="Name" className="rounded-xl" /></div>
                       <div className="space-y-2"><Label>Email</Label><Input id="head-email" type="email" placeholder="head@hospital.com" className="rounded-xl" /></div>
-                      <div className="space-y-2"><Label>Password</Label><Input id="head-password" type="password" placeholder="Min 6 characters" className="rounded-xl" /></div>
+                      <div className="space-y-2">
+                        <Label>Password</Label>
+                        <div className="relative">
+                          <Input id="head-password" type={showHeadPwd ? "text" : "password"} placeholder="Min 6 characters" className="rounded-xl" />
+                          <button type="button" onClick={() => setShowHeadPwd(!showHeadPwd)} className="absolute right-3 top-[10px] text-muted-foreground hover:text-foreground">
+                            {showHeadPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <SheetFooter className="mt-6">
                       <Button className="rounded-xl bg-gradient-primary" onClick={() => {
@@ -205,6 +295,9 @@ const Profile = () => {
                         const pwdEl = document.getElementById('head-password') as HTMLInputElement;
                         if (!nameEl?.value || !emailEl?.value || !pwdEl?.value) {
                            return toast.error('Please fill all required fields');
+                        }
+                        if (!/^\S+@\S+\.\S+$/.test(emailEl.value)) {
+                           return toast.error("Please enter a valid email address for the head account");
                         }
                         fetch('/api/auth/add-head', {
                           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -266,15 +359,30 @@ const Profile = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label>Current password</Label>
-            <Input type="password" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} className="rounded-xl" />
+            <div className="relative">
+              <Input type={showCurrentPwd ? "text" : "password"} value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} className="rounded-xl" />
+              <button type="button" onClick={() => setShowCurrentPwd(!showCurrentPwd)} className="absolute right-3 top-[10px] text-muted-foreground hover:text-foreground">
+                {showCurrentPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>New password</Label>
-            <Input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} className="rounded-xl" />
+            <div className="relative">
+              <Input type={showNewPwd ? "text" : "password"} value={newPwd} onChange={(e) => setNewPwd(e.target.value)} className="rounded-xl" />
+              <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-3 top-[10px] text-muted-foreground hover:text-foreground">
+                {showNewPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Confirm password</Label>
-            <Input type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} className="rounded-xl" />
+            <div className="relative">
+              <Input type={showConfirmPwd ? "text" : "password"} value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} className="rounded-xl" />
+              <button type="button" onClick={() => setShowConfirmPwd(!showConfirmPwd)} className="absolute right-3 top-[10px] text-muted-foreground hover:text-foreground">
+                {showConfirmPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
         </div>
         <div className="mt-3 text-xs text-muted-foreground">Last login: today at {new Date().toLocaleTimeString()}</div>

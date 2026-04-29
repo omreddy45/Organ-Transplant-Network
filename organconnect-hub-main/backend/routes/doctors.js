@@ -43,7 +43,7 @@ router.get('/', async (req, res) => {
     return res.json(rows);
   } catch (err) {
     console.error('GET /api/doctors error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to load doctors list: ${err.message}` });
   }
 });
 
@@ -64,7 +64,7 @@ router.put('/:id/status', async (req, res) => {
     return res.json({ message: 'Status updated' });
   } catch (err) {
     console.error('PUT /api/doctors/:id/status error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to update doctor status: ${err.message}` });
   }
 });
 
@@ -87,7 +87,7 @@ router.get('/:id/schedule', async (req, res) => {
     return res.json(rows);
   } catch (err) {
     console.error('GET /api/doctors/:id/schedule error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to load schedule: ${err.message}` });
   }
 });
 
@@ -98,7 +98,7 @@ router.post('/visit', async (req, res) => {
   const { doctor_id, patient_id, visit_date } = req.body;
 
   if (!doctor_id || !patient_id || !visit_date) {
-    return res.status(400).json({ error: 'doctor_id, patient_id, and visit_date are required' });
+    return res.status(400).json({ error: 'Missing required fields: doctor_id, patient_id, and visit_date are required.' });
   }
 
   try {
@@ -112,7 +112,27 @@ router.post('/visit', async (req, res) => {
       return res.status(409).json({ error: 'Visit already exists for this date' });
     }
     console.error('POST /api/doctors/visit error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to book visit: ${err.message}` });
+  }
+});
+// ──────────────────────────────────────────────
+// DELETE /api/doctors/:id — Remove a doctor (Loophole #7 fix)
+// ──────────────────────────────────────────────
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Get doctor's user_id first
+    const [docRows] = await db.query('SELECT user_id FROM Doctor WHERE doctor_id = ?', [id]);
+    if (!docRows.length) {
+      return res.status(404).json({ error: 'Doctor not found' });
+    }
+    const userId = docRows[0].user_id;
+    // Delete from Users table — cascade will remove Doctor record
+    await db.query('DELETE FROM Users WHERE user_id = ?', [userId]);
+    return res.json({ message: 'Doctor removed successfully' });
+  } catch (err) {
+    console.error('DELETE /api/doctors/:id error:', err);
+    return res.status(500).json({ error: `Failed to remove doctor: ${err.message}` });
   }
 });
 

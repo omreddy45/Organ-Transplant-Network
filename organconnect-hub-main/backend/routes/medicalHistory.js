@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
     return res.json(rows);
   } catch (err) {
     console.error('GET /api/medical-history error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to load medical history: ${err.message}` });
   }
 });
 
@@ -32,7 +32,7 @@ router.post('/add', async (req, res) => {
   const { patient_id, medical_detail } = req.body;
 
   if (!patient_id || !medical_detail) {
-    return res.status(400).json({ error: 'patient_id and medical_detail are required' });
+    return res.status(400).json({ error: 'Missing required fields: patient_id and medical_detail are both required.' });
   }
 
   try {
@@ -48,7 +48,7 @@ router.post('/add', async (req, res) => {
     });
   } catch (err) {
     console.error('POST /api/medical-history/add error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to add medical record: ${err.message}` });
   }
 });
 
@@ -63,7 +63,7 @@ router.delete('/:id', async (req, res) => {
     return res.json({ message: 'Record deleted' });
   } catch (err) {
     console.error('DELETE /api/medical-history/:id error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: `Failed to delete medical record: ${err.message}` });
   }
 });
 

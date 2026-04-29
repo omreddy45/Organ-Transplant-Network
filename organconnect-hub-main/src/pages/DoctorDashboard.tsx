@@ -11,6 +11,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,6 +31,7 @@ const DoctorDashboard = () => {
   const [schedule, setSchedule] = useState<any[]>([]);
   const [availability, setAvailability] = useState<string>("available");
   const [loading, setLoading] = useState(true);
+  const [orgName, setOrgName] = useState<string>("");
 
   const doctorId = user?.roleId;
   const orgId = user?.orgId;
@@ -38,18 +42,22 @@ const DoctorDashboard = () => {
     Promise.allSettled([
       api.transplants.list({ doctor_id: String(doctorId) }),
       api.doctors.schedule(doctorId),
-    ]).then(([trRes, schRes]) => {
-      if (trRes.status === 'fulfilled') {
-        const trData = trRes.value;
-        setTransplants(trData);
-        // Derive unique patients from this doctor's transplants
-        const seen = new Set();
-        const uniquePatients = trData
-          .filter((t: any) => { if (seen.has(t.patient_id)) return false; seen.add(t.patient_id); return true; })
-          .map((t: any) => ({ patient_id: t.patient_id, name: t.patient_name, organ: t.organ_name, status: t.status }));
-        setPatients(uniquePatients);
-      }
+      api.patients.list({ doctor_id: String(doctorId) }),
+      orgId ? fetch(`/api/auth/org/${orgId}`).then(r => r.ok ? r.json() : { name: "" }) : Promise.resolve({ name: "" })
+    ]).then(([trRes, schRes, patRes, orgRes]) => {
+      const trData = trRes.status === 'fulfilled' ? trRes.value : [];
+      setTransplants(trData);
+
+      let patData = patRes.status === 'fulfilled' ? patRes.value : [];
+      
+      const patientsWithTransplant = patData.map((p: any) => {
+         const t = trData.find((tr: any) => tr.patient_id === p.patient_id);
+         return { ...p, organ: t?.organ_name || 'N/A', status: t?.status || 'N/A' };
+      });
+      setPatients(patientsWithTransplant);
+
       if (schRes.status === 'fulfilled') setSchedule(schRes.value);
+      if (orgRes.status === 'fulfilled' && orgRes.value?.name) setOrgName(orgRes.value.name);
       setLoading(false);
     });
   }, [doctorId, orgId]);
@@ -74,7 +82,7 @@ const DoctorDashboard = () => {
 
   if (loading) {
     return (
-      <DashboardLayout nav={nav} title="Doctor Dashboard" subtitle="Manage patients and transplants">
+      <DashboardLayout nav={nav} title="Doctor Dashboard" subtitle={orgName || "Manage patients and transplants"}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-pulse text-muted-foreground">Loading your data...</div>
         </div>
@@ -86,7 +94,7 @@ const DoctorDashboard = () => {
   const completedTransplants = transplants.filter(t => t.status === 'completed').length;
 
   return (
-    <DashboardLayout nav={nav} title="Doctor Dashboard" subtitle="Manage patients and transplants">
+    <DashboardLayout nav={nav} title="Doctor Dashboard" subtitle={orgName || "Manage patients and transplants"}>
 
       {/* ── OVERVIEW ── */}
       {section === "overview" && (
@@ -155,16 +163,50 @@ const DoctorDashboard = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Patient Name</TableHead>
-                    <TableHead>Organ</TableHead>
-                    <TableHead>Transplant Status</TableHead>
+                    <TableHead>Contact Info</TableHead>
+                    <TableHead>Organ & Status</TableHead>
+                    <TableHead className="text-right">History</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {patients.map((p: any) => (
                     <TableRow key={p.patient_id}>
-                      <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{p.organ}</TableCell>
-                      <TableCell><StatusBadge status={p.status} /></TableCell>
+                      <TableCell className="font-medium">
+                        {p.name}
+                        {p.dob && <div className="text-xs text-muted-foreground mt-1">DOB: {new Date(p.dob).toLocaleDateString()}</div>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{p.email || '—'}</div>
+                        <div className="text-xs text-muted-foreground">{p.phones?.join(', ') || '—'}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{p.organ}</div>
+                        <div className="mt-1"><StatusBadge status={p.status} /></div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="rounded-xl">View History</Button>
+                          </DialogTrigger>
+                          <DialogContent className="rounded-2xl">
+                            <DialogHeader>
+                              <DialogTitle>Medical History: {p.name}</DialogTitle>
+                            </DialogHeader>
+                            <div className="max-h-96 overflow-y-auto space-y-3 mt-4">
+                              {p.medical_history && p.medical_history.length > 0 ? (
+                                p.medical_history.map((h: any) => (
+                                  <div key={h.history_id} className="p-3 bg-muted/50 rounded-xl border border-border/50">
+                                    <div className="text-xs text-muted-foreground mb-1">{format(new Date(h.record_date), "MMM d, yyyy")}</div>
+                                    <div className="text-sm">{h.medical_detail}</div>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-sm text-muted-foreground text-center p-4">No medical history available.</p>
+                              )}
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

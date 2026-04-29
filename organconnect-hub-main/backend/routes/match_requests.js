@@ -14,7 +14,7 @@ router.post('/', async (req, res) => {
     res.json({ message: 'Request submitted', request_id: result.insertId });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: `Failed to submit match request: ${err.message}` });
   }
 });
 
@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
     const [rows] = await db.query(sql, params);
     res.json(rows);
   } catch(err) {
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: `Failed to load match requests: ${err.message}` });
   }
 });
 
@@ -53,8 +53,13 @@ router.post('/:id/assign', async (req, res) => {
     const mReq = reqs[0];
     if (mReq.status !== 'pending') throw new Error("Request already assigned/completed");
 
-    // 2. Update Match Request to assigned
-    await conn.query("UPDATE Match_Request SET status = 'assigned' WHERE request_id = ?", [id]);
+    // 2. Update Match Request to matched
+    await conn.query("UPDATE Match_Request SET status = 'matched' WHERE request_id = ?", [id]);
+
+    // 2.5 Check Organ availability
+    const [organs] = await conn.query("SELECT availability_status FROM Organ WHERE organ_id = ?", [organ_id]);
+    if (!organs.length) throw new Error("Organ not found");
+    if (organs[0].availability_status !== 'available') throw new Error("Organ is already reserved or transplanted");
 
     // 3. Update Organ to 'reserved'
     await conn.query("UPDATE Organ SET availability_status = 'reserved' WHERE organ_id = ?", [organ_id]);
@@ -65,14 +70,32 @@ router.post('/:id/assign', async (req, res) => {
       [mReq.patient_id, doctor_id, organ_id, org_id]
     );
 
+    // 5. Auto-schedule a medical visit to inform patient and doctor
+    await conn.query(
+      "INSERT IGNORE INTO attends (doctor_id, patient_id, visit_date) VALUES (?, ?, CURDATE())",
+      [doctor_id, mReq.patient_id]
+    );
+
     await conn.commit();
     res.json({ message: 'Organ successfully assigned' });
   } catch(err) {
     await conn.rollback();
     console.error(err);
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(500).json({ error: err.message || 'Failed to assign organ to patient. Please try again.' });
   } finally {
     conn.release();
+  }
+});
+
+// Reject match request
+router.post('/:id/reject', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db.query("UPDATE Match_Request SET status = 'rejected' WHERE request_id = ?", [id]);
+    res.json({ message: 'Request rejected' });
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ error: `Failed to reject match request: ${err.message}` });
   }
 });
 

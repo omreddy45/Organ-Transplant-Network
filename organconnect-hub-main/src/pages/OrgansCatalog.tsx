@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PublicNavbar } from "@/components/PublicNavbar";
 import { Footer } from "@/components/Footer";
-import { StatusBadge } from "@/components/StatusBadge";
 import { ORGAN_TYPES } from "@/lib/mockData";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +12,6 @@ import { cn } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
 
 const iconMap: Record<string, typeof Heart> = {
   Kidney: Droplet, Liver: Activity, Heart: Heart, Lung: Wind,
@@ -38,7 +36,6 @@ const OrgansCatalog = () => {
 
   const [search, setSearch] = useState("");
   const [types, setTypes] = useState<string[]>(params.get("type") ? [params.get("type")!] : []);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [city, setCity] = useState<string>("all");
   const [gateOpen, setGateOpen] = useState(false);
   const [organs, setOrgans] = useState<any[]>([]);
@@ -46,7 +43,8 @@ const OrgansCatalog = () => {
 
   useEffect(() => {
     api.organs.list().then((data) => {
-      setOrgans(data);
+      // Only keep 'available' organs to prevent leaking reserved/transplanted stock to public
+      setOrgans(data.filter((o: any) => o.availability_status === 'available'));
       setLoading(false);
     }).catch(err => {
       console.error(err);
@@ -63,7 +61,7 @@ const OrgansCatalog = () => {
   };
 
   const reset = () => {
-    setSearch(""); setTypes([]); setStatusFilter("all"); setCity("all");
+    setSearch(""); setTypes([]); setCity("all");
     setParams({});
   };
 
@@ -71,11 +69,10 @@ const OrgansCatalog = () => {
     return organs.filter((o) => {
       if (search && !o.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (types.length && !types.includes(o.name)) return false;
-      if (statusFilter !== "all" && o.availability_status !== statusFilter) return false;
       if (city !== "all" && o.location !== city) return false;
       return true;
     });
-  }, [organs, search, types, statusFilter, city]);
+  }, [organs, search, types, city]);
 
   const handleRequestClick = () => {
     if (!isAuthenticated) return setGateOpen(true);
@@ -107,20 +104,11 @@ const OrgansCatalog = () => {
                 />
               </div>
               <select
-                value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-              >
-                <option value="all">All statuses</option>
-                <option value="available">Available</option>
-                <option value="reserved">Reserved</option>
-                <option value="transplanted">Transplanted</option>
-              </select>
-              <select
                 value={city} onChange={(e) => setCity(e.target.value)}
                 className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
               >
                 <option value="all">All locations</option>
-                {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+                {cities.map((c: any) => <option key={c} value={c}>{c}</option>)}
               </select>
               <Button variant="ghost" onClick={reset} className="rounded-xl">
                 <X size={14} className="mr-1" /> Clear
@@ -165,11 +153,12 @@ const OrgansCatalog = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {filtered.map((organ, i) => {
-                const Icon = iconMap[organ.name] ?? Heart;
-                const banner = colorMap[organ.name] ?? "from-primary to-primary-glow";
+                const organName = organ.name;
+                const Icon = iconMap[organName] ?? Heart;
+                const banner = colorMap[organName] ?? "from-primary to-primary-glow";
                 return (
                   <article
-                    key={organ.organ_id}
+                    key={organ.organ_id || i}
                     className="glass rounded-2xl overflow-hidden hover-lift animate-fade-in"
                     style={{ animationDelay: `${i * 40}ms` }}
                   >
@@ -179,35 +168,14 @@ const OrgansCatalog = () => {
                         <div className={cn("h-12 w-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-white", banner)}>
                           <Icon size={20} />
                         </div>
-                        <StatusBadge status={organ.availability_status} />
                       </div>
-                      <h3 className="mt-4 font-semibold text-lg">{organ.name}</h3>
-                      <p className="text-sm text-muted-foreground">{organ.organization_name}</p>
-                      <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                      <h3 className="mt-4 font-semibold text-xl">{organName}</h3>
+                      <p className="text-sm text-foreground mt-2 font-medium">
+                        {organ.organization_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                         <MapPin size={12} /> {organ.location}
-                        {organ.blood_type && <span className="ml-2 px-2 py-0.5 rounded-full bg-muted">{organ.blood_type}</span>}
-                      </div>
-                      <div className="mt-4 flex items-center justify-between">
-                        <div className="text-sm">
-                          {organ.availability_status === "available" ? (
-                            <>
-                              <span className="font-semibold">{organ.quantity}</span>
-                              <span className="text-muted-foreground"> available</span>
-                            </>
-                          ) : (
-                            <span className="font-medium text-muted-foreground capitalize">
-                              {organ.availability_status}
-                            </span>
-                          )}
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={handleRequestClick}
-                          className="rounded-lg bg-gradient-primary hover:opacity-90"
-                        >
-                          Submit Match Request
-                        </Button>
-                      </div>
+                      </p>
                     </div>
                   </article>
                 );

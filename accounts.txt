@@ -1,0 +1,14 @@
+Patient:
+Email: sanskar@gmail.com
+
+Donor:
+Email: ved@gmail.com
+
+Doctor:
+Email: dr.dhoni@gmail.com
+
+Organization:
+Email: SahyadriHospital@gmail.com
+
+Head:
+Email: SahyadriHospitalHead@gmail.com

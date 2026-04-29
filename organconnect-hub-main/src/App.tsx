@@ -15,6 +15,7 @@ import DonorDashboard from "./pages/DonorDashboard";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import OrganizationDashboard from "./pages/OrganizationDashboard";
 import HeadDashboard from "./pages/HeadDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
@@ -48,6 +49,9 @@ const App = () => (
               } />
               <Route path="/dashboard/head" element={
                 <ProtectedRoute allowedRoles={["head"]}><HeadDashboard /></ProtectedRoute>
+              } />
+              <Route path="/dashboard/admin" element={
+                <ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>
               } />
               <Route path="/profile" element={
                 <ProtectedRoute><Profile /></ProtectedRoute>
