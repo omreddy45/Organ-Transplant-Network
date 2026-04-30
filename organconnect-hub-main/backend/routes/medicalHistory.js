@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
 
   try {
     const [rows] = await db.query(
-      'SELECT * FROM Medical_History WHERE patient_id = ? ORDER BY record_date DESC',
+      'SELECT * FROM medical_history WHERE patient_id = ? ORDER BY record_date DESC',
       [patient_id]
     );
     return res.json(rows);
@@ -37,7 +37,7 @@ router.post('/add', async (req, res) => {
 
   try {
     const [result] = await db.query(
-      'INSERT INTO Medical_History (patient_id, medical_detail) VALUES (?, ?)',
+      'INSERT INTO medical_history (patient_id, medical_detail) VALUES (?, ?)',
       [patient_id, medical_detail]
     );
 
@@ -59,7 +59,7 @@ router.delete('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    await db.query('DELETE FROM Medical_History WHERE history_id = ?', [id]);
+    await db.query('DELETE FROM medical_history WHERE history_id = ?', [id]);
     return res.json({ message: 'Record deleted' });
   } catch (err) {
     console.error('DELETE /api/medical-history/:id error:', err);

@@ -9,10 +9,10 @@ const router = Router();
 // ──────────────────────────────────────────────
 router.get('/stats', async (_req, res) => {
   try {
-    const [donors] = await db.query('SELECT COUNT(*) AS count FROM Donor');
-    const [organs] = await db.query("SELECT COUNT(*) AS count FROM Organ WHERE availability_status = 'available'");
-    const [transplants] = await db.query("SELECT COUNT(*) AS count FROM Transplant WHERE status = 'completed'");
-    const [orgs] = await db.query('SELECT COUNT(*) AS count FROM Organization');
+    const [donors] = await db.query('SELECT COUNT(*) AS count FROM donor');
+    const [organs] = await db.query("SELECT COUNT(*) AS count FROM organ WHERE availability_status = 'available'");
+    const [transplants] = await db.query("SELECT COUNT(*) AS count FROM transplant WHERE status = 'completed'");
+    const [orgs] = await db.query('SELECT COUNT(*) AS count FROM organization');
 
     return res.json({
       donors: donors[0].count,
@@ -31,7 +31,7 @@ router.get('/stats', async (_req, res) => {
 // ──────────────────────────────────────────────
 router.get('/organizations', async (_req, res) => {
   try {
-    const [rows] = await db.query('SELECT org_id, name, location FROM Organization ORDER BY name ASC');
+    const [rows] = await db.query('SELECT org_id, name, location FROM organization ORDER BY name ASC');
     return res.json(rows);
   } catch (err) {
     console.error('GET /api/organs/organizations error:', err);
@@ -50,9 +50,9 @@ router.get('/inventory', async (req, res) => {
       SELECT o.organ_id, o.name, o.quantity, o.availability_status,
              o.donor_id, d.name AS donor_name, o.org_id,
              org.name AS organization_name, org.location
-      FROM Organ o
-      JOIN Organization org ON o.org_id = org.org_id
-      LEFT JOIN Donor d ON o.donor_id = d.donor_id
+      FROM organ o
+      JOIN organization org ON o.org_id = org.org_id
+      LEFT JOIN donor d ON o.donor_id = d.donor_id
     `;
     const params = [];
 
@@ -82,9 +82,9 @@ router.get('/', async (req, res) => {
       SELECT o.organ_id, o.name, o.quantity, o.availability_status,
              o.donor_id, d.name AS donor_name, o.org_id,
              org.name AS organization_name, org.location
-      FROM Organ o
-      JOIN Organization org ON o.org_id = org.org_id
-      LEFT JOIN Donor d ON o.donor_id = d.donor_id
+      FROM organ o
+      JOIN organization org ON o.org_id = org.org_id
+      LEFT JOIN donor d ON o.donor_id = d.donor_id
       WHERE 1=1
     `;
     const params = [];
@@ -116,7 +116,7 @@ router.post('/add', async (req, res) => {
     }
 
     const [result] = await db.query(
-      'INSERT INTO Organ (name, quantity, availability_status, donor_id, org_id) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO organ (name, quantity, availability_status, donor_id, org_id) VALUES (?, ?, ?, ?, ?)',
       [name, quantity || 1, availability_status || 'available', donor_id || null, org_id]
     );
 
@@ -131,7 +131,7 @@ router.post('/add', async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
-// PUT /api/organs/:id — Update organ
+// PUT /api/organs/:id — UPDATE organ
 // ──────────────────────────────────────────────
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
@@ -151,12 +151,12 @@ router.put('/:id', async (req, res) => {
     }
 
     params.push(id);
-    await db.query(`UPDATE Organ SET ${fields.join(', ')} WHERE organ_id = ?`, params);
+    await db.query(`UPDATE organ SET ${fields.join(', ')} WHERE organ_id = ?`, params);
 
     return res.json({ message: 'Organ updated' });
   } catch (err) {
     console.error('PUT /api/organs/:id error:', err);
-    return res.status(500).json({ error: `Failed to update organ: ${err.message}` });
+    return res.status(500).json({ error: `Failed to UPDATE organ: ${err.message}` });
   }
 });
 
@@ -167,7 +167,7 @@ router.delete('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    await db.query('DELETE FROM Organ WHERE organ_id = ?', [id]);
+    await db.query('DELETE FROM organ WHERE organ_id = ?', [id]);
     return res.json({ message: 'Organ deleted' });
   } catch (err) {
     console.error('DELETE /api/organs/:id error:', err);

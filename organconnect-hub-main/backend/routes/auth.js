@@ -65,7 +65,7 @@ router.post('/signup', async (req, res) => {
     }
 
     // Check duplicate email — with role-aware guidance (Loophole #3 fix)
-    const [existing] = await conn.query('SELECT user_id, role FROM Users WHERE email = ?', [email]);
+    const [existing] = await conn.query('SELECT user_id, role FROM users WHERE email = ?', [email]);
     if (existing.length > 0) {
       const existingRole = existing[0].role;
       if (existingRole !== role) {
@@ -78,7 +78,7 @@ router.post('/signup', async (req, res) => {
 
     // Generate or validate username
     const uname = username || email.split('@')[0] + Math.floor(Math.random() * 1000);
-    const [existingUser] = await conn.query('SELECT user_id FROM Users WHERE username = ?', [uname]);
+    const [existingUser] = await conn.query('SELECT user_id FROM users WHERE username = ?', [uname]);
     if (existingUser.length > 0) {
       return res.status(409).json({ error: 'Username already taken' });
     }
@@ -88,9 +88,9 @@ router.post('/signup', async (req, res) => {
     // ── Begin transaction for atomicity ──
     await conn.beginTransaction();
 
-    // Insert into Users
+    // Insert INTO users
     const [userResult] = await conn.query(
-      'INSERT INTO Users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
+      'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
       [uname, email, passwordHash, role]
     );
     const userId = userResult.insertId;
@@ -102,10 +102,10 @@ router.post('/signup', async (req, res) => {
         return res.status(400).json({ error: 'DOB, city, and state are required for patients' });
       }
       await conn.query(
-        'INSERT INTO Patient (user_id, name, dob, street, city, state, medical_insurance) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO patient (user_id, name, dob, street, city, state, medical_insurance) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [userId, name, dob, street || null, city, state, insurance || null]
       );
-      const [patientRows] = await conn.query('SELECT patient_id FROM Patient WHERE user_id = ?', [userId]);
+      const [patientRows] = await conn.query('SELECT patient_id FROM patient WHERE user_id = ?', [userId]);
       const ph = phoneNumber || phone;
       if (ph && patientRows.length > 0) {
         await conn.query('INSERT INTO Patient_Phone (patient_id, phone) VALUES (?, ?)', [patientRows[0].patient_id, ph]);
@@ -118,10 +118,10 @@ router.post('/signup', async (req, res) => {
         return res.status(400).json({ error: 'DOB is required for donors' });
       }
       await conn.query(
-        'INSERT INTO Donor (user_id, name, dob, donation_reason) VALUES (?, ?, ?, ?)',
+        'INSERT INTO donor (user_id, name, dob, donation_reason) VALUES (?, ?, ?, ?)',
         [userId, name, dob, reason || null]
       );
-      const [donorRows] = await conn.query('SELECT donor_id FROM Donor WHERE user_id = ?', [userId]);
+      const [donorRows] = await conn.query('SELECT donor_id FROM donor WHERE user_id = ?', [userId]);
       const ph = phoneNumber || phone;
       if (ph && donorRows.length > 0) {
         await conn.query('INSERT INTO Donor_Phone (donor_id, phone) VALUES (?, ?)', [donorRows[0].donor_id, ph]);
@@ -135,16 +135,16 @@ router.post('/signup', async (req, res) => {
       }
       // Validate that org_id exists
       const orgId = org_id || 1;
-      const [orgCheck] = await conn.query('SELECT org_id FROM Organization WHERE org_id = ?', [orgId]);
+      const [orgCheck] = await conn.query('SELECT org_id FROM organization WHERE org_id = ?', [orgId]);
       if (orgCheck.length === 0) {
         await conn.rollback();
         return res.status(400).json({ error: 'Invalid organization ID' });
       }
       await conn.query(
-        'INSERT INTO Doctor (user_id, name, specialization, org_id) VALUES (?, ?, ?, ?)',
+        'INSERT INTO doctor (user_id, name, specialization, org_id) VALUES (?, ?, ?, ?)',
         [userId, name, specialization, orgId]
       );
-      const [docRows] = await conn.query('SELECT doctor_id FROM Doctor WHERE user_id = ?', [userId]);
+      const [docRows] = await conn.query('SELECT doctor_id FROM doctor WHERE user_id = ?', [userId]);
       const ph = phoneNumber || phone;
       if (ph && docRows.length > 0) {
         await conn.query('INSERT INTO Doctor_Phone (doctor_id, phone) VALUES (?, ?)', [docRows[0].doctor_id, ph]);
@@ -154,10 +154,10 @@ router.post('/signup', async (req, res) => {
     if (role === 'organization') {
       const oName = orgName || name;
       await conn.query(
-        'INSERT INTO Organization (user_id, name, location, license_number, government_approved) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO organization (user_id, name, location, license_number, government_approved) VALUES (?, ?, ?, ?, ?)',
         [userId, oName, location, license, true]
       );
-      const [orgRows] = await conn.query('SELECT org_id FROM Organization WHERE user_id = ?', [userId]);
+      const [orgRows] = await conn.query('SELECT org_id FROM organization WHERE user_id = ?', [userId]);
       if (orgRows.length > 0) {
         const oid = orgRows[0].org_id;
         const ph = phoneNumber || phone;
@@ -197,7 +197,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const [rows] = await db.query('SELECT * FROM Users WHERE email = ?', [email]);
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
     const user = rows[0];
 
     if (!user) {
@@ -219,16 +219,16 @@ router.post('/login', async (req, res) => {
         name = 'System Admin';
         roleId = user.user_id;
       } else if (user.role === 'patient') {
-        const [p] = await db.query('SELECT patient_id, name FROM Patient WHERE user_id = ?', [user.user_id]);
+        const [p] = await db.query('SELECT patient_id, name FROM patient WHERE user_id = ?', [user.user_id]);
         if (p.length) { name = p[0].name; roleId = p[0].patient_id; }
       } else if (user.role === 'donor') {
-        const [d] = await db.query('SELECT donor_id, name FROM Donor WHERE user_id = ?', [user.user_id]);
+        const [d] = await db.query('SELECT donor_id, name FROM donor WHERE user_id = ?', [user.user_id]);
         if (d.length) { name = d[0].name; roleId = d[0].donor_id; }
       } else if (user.role === 'doctor') {
-        const [d] = await db.query('SELECT doctor_id, name, org_id FROM Doctor WHERE user_id = ?', [user.user_id]);
+        const [d] = await db.query('SELECT doctor_id, name, org_id FROM doctor WHERE user_id = ?', [user.user_id]);
         if (d.length) { name = d[0].name; roleId = d[0].doctor_id; orgId = d[0].org_id; }
       } else if (user.role === 'organization') {
-        const [o] = await db.query('SELECT org_id, name FROM Organization WHERE user_id = ?', [user.user_id]);
+        const [o] = await db.query('SELECT org_id, name FROM organization WHERE user_id = ?', [user.user_id]);
         if (o.length) { 
           name = o[0].name; roleId = o[0].org_id; orgId = o[0].org_id; 
         } else {
@@ -245,7 +245,7 @@ router.post('/login', async (req, res) => {
     // Create session
     const sessionId = uuidv4();
     await db.query(
-      'INSERT INTO Sessions (session_id, user_id) VALUES (?, ?)',
+      'INSERT INTO sessions (session_id, user_id) VALUES (?, ?)',
       [sessionId, user.user_id]
     );
 
@@ -276,11 +276,11 @@ router.post('/reset-password', async (req, res) => {
     return res.status(400).json({ error: 'Email and new password are required' });
   }
   try {
-    const [rows] = await db.query('SELECT user_id FROM Users WHERE email = ?', [email]);
+    const [rows] = await db.query('SELECT user_id FROM users WHERE email = ?', [email]);
     if (rows.length === 0) return res.status(404).json({ error: 'No account found with that email address.' });
 
     const hash = await bcrypt.hash(newPassword, 10);
-    await db.query('UPDATE Users SET password_hash = ? WHERE email = ?', [hash, email]);
+    await db.query('UPDATE users SET password_hash = ? WHERE email = ?', [hash, email]);
     return res.json({ message: 'Password has been successfully reset.' });
   } catch (err) {
     console.error('Password reset error:', err);
@@ -295,7 +295,7 @@ router.post('/logout', async (req, res) => {
   const { sessionId } = req.body;
   try {
     if (sessionId) {
-      await db.query('UPDATE Sessions SET logout_time = NOW() WHERE session_id = ?', [sessionId]);
+      await db.query('UPDATE sessions SET logout_time = NOW() WHERE session_id = ?', [sessionId]);
     }
     return res.json({ message: 'Logged out' });
   } catch (err) {
@@ -319,13 +319,13 @@ router.post('/add-head', async (req, res) => {
     const [existingHeads] = await conn.query("SELECT user_id FROM Organization_Head WHERE org_id = ?", [org_id]);
     for (const h of existingHeads) {
       await conn.query("DELETE FROM Organization_Head WHERE user_id = ?", [h.user_id]);
-      await conn.query("DELETE FROM Users WHERE user_id = ?", [h.user_id]);
+      await conn.query("DELETE FROM users WHERE user_id = ?", [h.user_id]);
     }
 
     const uname = email.split('@')[0] + Math.floor(Math.random() * 1000);
     const passwordHash = await bcrypt.hash(password, 10);
     const [userResult] = await conn.query(
-      "INSERT INTO Users (username, email, password_hash, role) VALUES (?, ?, ?, 'organization')",
+      "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'organization')",
       [uname, email, passwordHash]
     );
     const userId = userResult.insertId;
@@ -364,7 +364,7 @@ router.get('/head/:org_id', async (req, res) => {
 // ──────────────────────────────────────────────
 router.get('/org/:org_id', async (req, res) => {
   try {
-    const [o] = await db.query('SELECT name FROM Organization WHERE org_id = ?', [req.params.org_id]);
+    const [o] = await db.query('SELECT name FROM organization WHERE org_id = ?', [req.params.org_id]);
     if (o.length > 0) return res.json(o[0]);
     return res.status(404).json({ error: "Not found" });
   } catch (err) {
@@ -394,7 +394,7 @@ router.delete('/head/:org_id', async (req, res) => {
     }
     for (const h of heads) {
       await conn.query('DELETE FROM Organization_Head WHERE user_id = ?', [h.user_id]);
-      await conn.query('DELETE FROM Users WHERE user_id = ?', [h.user_id]);
+      await conn.query('DELETE FROM users WHERE user_id = ?', [h.user_id]);
     }
     await conn.commit();
     return res.json({ message: 'Head account removed successfully' });

@@ -15,8 +15,8 @@ router.get('/', async (req, res) => {
       SELECT d.doctor_id, d.user_id, d.name, d.specialization,
              d.availability_status, d.org_id,
              org.name AS organization_name
-      FROM Doctor d
-      JOIN Organization org ON d.org_id = org.org_id
+      FROM doctor d
+      JOIN organization org ON d.org_id = org.org_id
       WHERE 1=1
     `;
     const params = [];
@@ -60,11 +60,11 @@ router.put('/:id/status', async (req, res) => {
   }
 
   try {
-    await db.query('UPDATE Doctor SET availability_status = ? WHERE doctor_id = ?', [availability_status, id]);
+    await db.query('UPDATE doctor SET availability_status = ? WHERE doctor_id = ?', [availability_status, id]);
     return res.json({ message: 'Status updated' });
   } catch (err) {
     console.error('PUT /api/doctors/:id/status error:', err);
-    return res.status(500).json({ error: `Failed to update doctor status: ${err.message}` });
+    return res.status(500).json({ error: `Failed to UPDATE doctor status: ${err.message}` });
   }
 });
 
@@ -78,7 +78,7 @@ router.get('/:id/schedule', async (req, res) => {
     const [rows] = await db.query(`
       SELECT a.visit_date, a.patient_id, p.name AS patient_name
       FROM Attends a
-      JOIN Patient p ON a.patient_id = p.patient_id
+      JOIN patient p ON a.patient_id = p.patient_id
       WHERE a.doctor_id = ?
       ORDER BY a.visit_date DESC
       LIMIT 30
@@ -122,13 +122,13 @@ router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
     // Get doctor's user_id first
-    const [docRows] = await db.query('SELECT user_id FROM Doctor WHERE doctor_id = ?', [id]);
+    const [docRows] = await db.query('SELECT user_id FROM doctor WHERE doctor_id = ?', [id]);
     if (!docRows.length) {
       return res.status(404).json({ error: 'Doctor not found' });
     }
     const userId = docRows[0].user_id;
-    // Delete from Users table — cascade will remove Doctor record
-    await db.query('DELETE FROM Users WHERE user_id = ?', [userId]);
+    // Delete FROM users table — cascade will remove Doctor record
+    await db.query('DELETE FROM users WHERE user_id = ?', [userId]);
     return res.json({ message: 'Doctor removed successfully' });
   } catch (err) {
     console.error('DELETE /api/doctors/:id error:', err);

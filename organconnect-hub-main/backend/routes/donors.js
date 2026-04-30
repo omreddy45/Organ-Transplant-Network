@@ -7,7 +7,7 @@ const router = Router();
 router.get('/', async (req, res) => {
   const { status } = req.query;
   try {
-    let sql = 'SELECT d.*, u.email FROM Donor d JOIN Users u ON d.user_id = u.user_id';
+    let sql = 'SELECT d.*, u.email FROM donor d JOIN users u ON d.user_id = u.user_id';
     const params = [];
     if (status) {
       sql += ' WHERE d.donor_status = ?';
@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
 router.put('/:id/approve', async (req, res) => {
   try {
     const { id } = req.params;
-    await db.query("UPDATE Donor SET donor_status = 'approved' WHERE donor_id = ?", [id]);
+    await db.query("UPDATE donor SET donor_status = 'approved' WHERE donor_id = ?", [id]);
     res.json({ message: 'Donor approved' });
   } catch(err) {
     console.error(err);
@@ -38,7 +38,7 @@ router.put('/:id/approve', async (req, res) => {
 router.put('/:id/reject', async (req, res) => {
   try {
     const { id } = req.params;
-    await db.query("UPDATE Donor SET donor_status = 'rejected' WHERE donor_id = ?", [id]);
+    await db.query("UPDATE donor SET donor_status = 'rejected' WHERE donor_id = ?", [id]);
     res.json({ message: 'Donor rejected' });
   } catch(err) {
     console.error(err);
@@ -59,7 +59,7 @@ router.post('/pledge', async (req, res) => {
 
     // Count existing approved + pending pledges for this donor and organ type
     const [countRows] = await db.query(
-      "SELECT COUNT(*) AS cnt FROM Donor_Pledge WHERE donor_id = ? AND organ_type = ? AND status IN ('approved', 'pending')",
+      "SELECT COUNT(*) AS cnt FROM donor_pledge WHERE donor_id = ? AND organ_type = ? AND status IN ('approved', 'pending')",
       [donor_id, organ_type]
     );
     const currentCount = countRows[0].cnt;
@@ -71,7 +71,7 @@ router.post('/pledge', async (req, res) => {
     }
 
     const [result] = await db.query(
-      'INSERT INTO Donor_Pledge (donor_id, org_id, organ_type, status) VALUES (?, ?, ?, "pending")',
+      'INSERT INTO donor_pledge (donor_id, org_id, organ_type, status) VALUES (?, ?, ?, "pending")',
       [donor_id, org_id, organ_type]
     );
     res.json({ message: 'Pledge submitted', pledge_id: result.insertId });
@@ -90,10 +90,10 @@ router.get('/pledges', async (req, res) => {
   try {
     let sql = `
       SELECT p.*, d.name as donor_name, u.email as donor_email, o.name as org_name 
-      FROM Donor_Pledge p 
-      JOIN Donor d ON p.donor_id = d.donor_id
-      JOIN Users u ON d.user_id = u.user_id
-      JOIN Organization o ON p.org_id = o.org_id
+      FROM donor_pledge p 
+      JOIN donor d ON p.donor_id = d.donor_id
+      JOIN users u ON d.user_id = u.user_id
+      JOIN organization o ON p.org_id = o.org_id
       WHERE 1=1
     `;
     const params = [];
@@ -115,21 +115,21 @@ router.post('/pledge/:id/approve', async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    const [rows] = await conn.query("SELECT * FROM Donor_Pledge WHERE pledge_id = ?", [id]);
+    const [rows] = await conn.query("SELECT * FROM donor_pledge WHERE pledge_id = ?", [id]);
     if (!rows.length) throw new Error("Pledge not found");
     const pl = rows[0];
 
     // Automatically approve donor when their pledge is accepted
-    const [dRows] = await conn.query("SELECT donor_status FROM Donor WHERE donor_id = ?", [pl.donor_id]);
+    const [dRows] = await conn.query("SELECT donor_status FROM donor WHERE donor_id = ?", [pl.donor_id]);
     if (dRows.length && dRows[0].donor_status !== 'approved') {
-      await conn.query("UPDATE Donor SET donor_status = 'approved' WHERE donor_id = ?", [pl.donor_id]);
+      await conn.query("UPDATE donor SET donor_status = 'approved' WHERE donor_id = ?", [pl.donor_id]);
     }
 
-    await conn.query("UPDATE Donor_Pledge SET status = 'approved' WHERE pledge_id = ?", [id]);
+    await conn.query("UPDATE donor_pledge SET status = 'approved' WHERE pledge_id = ?", [id]);
     
     // Add Organ 
     await conn.query(
-      "INSERT INTO Organ (name, quantity, availability_status, donor_id, org_id) VALUES (?, 1, 'available', ?, ?)",
+      "INSERT INTO organ (name, quantity, availability_status, donor_id, org_id) VALUES (?, 1, 'available', ?, ?)",
       [pl.organ_type, pl.donor_id, pl.org_id]
     );
 
@@ -148,7 +148,7 @@ router.post('/pledge/:id/approve', async (req, res) => {
 router.post('/pledge/:id/reject', async (req, res) => {
   const { id } = req.params;
   try {
-    await db.query("UPDATE Donor_Pledge SET status = 'rejected' WHERE pledge_id = ?", [id]);
+    await db.query("UPDATE donor_pledge SET status = 'rejected' WHERE pledge_id = ?", [id]);
     res.json({ message: 'Pledge rejected' });
   } catch(err) {
     console.error(err);

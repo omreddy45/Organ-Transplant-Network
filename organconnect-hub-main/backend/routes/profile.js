@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    const [users] = await db.query('SELECT user_id, username, email, role, created_at FROM Users WHERE user_id = ?', [user_id]);
+    const [users] = await db.query('SELECT user_id, username, email, role, created_at FROM users WHERE user_id = ?', [user_id]);
     if (!users.length) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -24,14 +24,14 @@ router.get('/', async (req, res) => {
     let phones = [];
 
     if (user.role === 'patient') {
-      const [rows] = await db.query('SELECT * FROM Patient WHERE user_id = ?', [user_id]);
+      const [rows] = await db.query('SELECT * FROM patient WHERE user_id = ?', [user_id]);
       if (rows.length) {
         profile = rows[0];
         const [ph] = await db.query('SELECT phone FROM Patient_Phone WHERE patient_id = ?', [rows[0].patient_id]);
         phones = ph.map(p => p.phone);
       }
     } else if (user.role === 'donor') {
-      const [rows] = await db.query('SELECT * FROM Donor WHERE user_id = ?', [user_id]);
+      const [rows] = await db.query('SELECT * FROM donor WHERE user_id = ?', [user_id]);
       if (rows.length) {
         profile = rows[0];
         const [ph] = await db.query('SELECT phone FROM Donor_Phone WHERE donor_id = ?', [rows[0].donor_id]);
@@ -40,8 +40,8 @@ router.get('/', async (req, res) => {
     } else if (user.role === 'doctor') {
       const [rows] = await db.query(`
         SELECT d.*, org.name AS organization_name
-        FROM Doctor d
-        JOIN Organization org ON d.org_id = org.org_id
+        FROM doctor d
+        JOIN organization org ON d.org_id = org.org_id
         WHERE d.user_id = ?
       `, [user_id]);
       if (rows.length) {
@@ -50,7 +50,7 @@ router.get('/', async (req, res) => {
         phones = ph.map(p => p.phone);
       }
     } else if (user.role === 'organization') {
-      const [rows] = await db.query('SELECT * FROM Organization WHERE user_id = ?', [user_id]);
+      const [rows] = await db.query('SELECT * FROM organization WHERE user_id = ?', [user_id]);
       if (rows.length) {
         profile = rows[0];
         const [ph] = await db.query('SELECT phone FROM Organization_Phone WHERE org_id = ?', [rows[0].org_id]);
@@ -81,11 +81,11 @@ router.put('/update', async (req, res) => {
   try {
     // Update email in Users if changed
     if (email) {
-      await db.query('UPDATE Users SET email = ? WHERE user_id = ?', [email, user_id]);
+      await db.query('UPDATE users SET email = ? WHERE user_id = ?', [email, user_id]);
     }
 
     // Get user role
-    const [users] = await db.query('SELECT role FROM Users WHERE user_id = ?', [user_id]);
+    const [users] = await db.query('SELECT role FROM users WHERE user_id = ?', [user_id]);
     if (!users.length) return res.status(404).json({ error: 'User not found' });
     const { role } = users[0];
 
@@ -100,12 +100,12 @@ router.put('/update', async (req, res) => {
 
       if (fields.length) {
         params.push(user_id);
-        await db.query(`UPDATE Patient SET ${fields.join(', ')} WHERE user_id = ?`, params);
+        await db.query(`UPDATE patient SET ${fields.join(', ')} WHERE user_id = ?`, params);
       }
 
       // Update phones
       if (phones) {
-        const [pRows] = await db.query('SELECT patient_id FROM Patient WHERE user_id = ?', [user_id]);
+        const [pRows] = await db.query('SELECT patient_id FROM patient WHERE user_id = ?', [user_id]);
         if (pRows.length) {
           await db.query('DELETE FROM Patient_Phone WHERE patient_id = ?', [pRows[0].patient_id]);
           for (const ph of phones) {
@@ -123,11 +123,11 @@ router.put('/update', async (req, res) => {
 
       if (fields.length) {
         params.push(user_id);
-        await db.query(`UPDATE Donor SET ${fields.join(', ')} WHERE user_id = ?`, params);
+        await db.query(`UPDATE donor SET ${fields.join(', ')} WHERE user_id = ?`, params);
       }
 
       if (phones) {
-        const [dRows] = await db.query('SELECT donor_id FROM Donor WHERE user_id = ?', [user_id]);
+        const [dRows] = await db.query('SELECT donor_id FROM donor WHERE user_id = ?', [user_id]);
         if (dRows.length) {
           await db.query('DELETE FROM Donor_Phone WHERE donor_id = ?', [dRows[0].donor_id]);
           for (const ph of phones) {
@@ -146,11 +146,11 @@ router.put('/update', async (req, res) => {
 
       if (fields.length) {
         params.push(user_id);
-        await db.query(`UPDATE Doctor SET ${fields.join(', ')} WHERE user_id = ?`, params);
+        await db.query(`UPDATE doctor SET ${fields.join(', ')} WHERE user_id = ?`, params);
       }
 
       if (phones) {
-        const [docRows] = await db.query('SELECT doctor_id FROM Doctor WHERE user_id = ?', [user_id]);
+        const [docRows] = await db.query('SELECT doctor_id FROM doctor WHERE user_id = ?', [user_id]);
         if (docRows.length) {
           await db.query('DELETE FROM Doctor_Phone WHERE doctor_id = ?', [docRows[0].doctor_id]);
           for (const ph of phones) {
@@ -169,11 +169,11 @@ router.put('/update', async (req, res) => {
 
       if (fields.length) {
         params.push(user_id);
-        await db.query(`UPDATE Organization SET ${fields.join(', ')} WHERE user_id = ?`, params);
+        await db.query(`UPDATE organization SET ${fields.join(', ')} WHERE user_id = ?`, params);
       }
 
       if (phones) {
-        const [orgRows] = await db.query('SELECT org_id FROM Organization WHERE user_id = ?', [user_id]);
+        const [orgRows] = await db.query('SELECT org_id FROM organization WHERE user_id = ?', [user_id]);
         if (orgRows.length) {
           await db.query('DELETE FROM Organization_Phone WHERE org_id = ?', [orgRows[0].org_id]);
           for (const ph of phones) {
@@ -204,14 +204,14 @@ router.put('/password', async (req, res) => {
   }
 
   try {
-    const [users] = await db.query('SELECT password_hash FROM Users WHERE user_id = ?', [user_id]);
+    const [users] = await db.query('SELECT password_hash FROM users WHERE user_id = ?', [user_id]);
     if (!users.length) return res.status(404).json({ error: 'User not found' });
 
     const isMatch = await bcrypt.compare(currentPassword, users[0].password_hash);
     if (!isMatch) return res.status(401).json({ error: 'Current password is incorrect' });
 
     const hash = await bcrypt.hash(newPassword, 10);
-    await db.query('UPDATE Users SET password_hash = ? WHERE user_id = ?', [hash, user_id]);
+    await db.query('UPDATE users SET password_hash = ? WHERE user_id = ?', [hash, user_id]);
 
     return res.json({ message: 'Password updated' });
   } catch (err) {
@@ -232,12 +232,12 @@ router.delete('/', async (req, res) => {
 
   try {
     // Check if user exists first
-    const [check] = await db.query('SELECT role FROM Users WHERE user_id = ?', [user_id]);
+    const [check] = await db.query('SELECT role FROM users WHERE user_id = ?', [user_id]);
     if (!check.length) {
       return res.status(404).json({ error: 'Account not found. It may have already been deleted.' });
     }
     // CASCADE in schema handles child rows
-    await db.query('DELETE FROM Users WHERE user_id = ?', [user_id]);
+    await db.query('DELETE FROM users WHERE user_id = ?', [user_id]);
     return res.json({ message: `Account (${check[0].role}) deleted successfully. All related records have been removed and backed up in the audit log.` });
   } catch (err) {
     console.error('DELETE /api/profile error:', err);

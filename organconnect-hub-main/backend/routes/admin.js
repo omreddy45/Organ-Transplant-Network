@@ -9,15 +9,15 @@ const router = Router();
 // ──────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
   try {
-    const [users] = await db.query('SELECT COUNT(*) AS count FROM Users');
-    const [orgs] = await db.query('SELECT COUNT(*) AS count FROM Organization');
-    const [donors] = await db.query('SELECT COUNT(*) AS count FROM Donor');
-    const [patients] = await db.query('SELECT COUNT(*) AS count FROM Patient');
-    const [doctors] = await db.query('SELECT COUNT(*) AS count FROM Doctor');
-    const [organs] = await db.query("SELECT COUNT(*) AS count FROM Organ WHERE availability_status = 'available'");
-    const [transplants] = await db.query("SELECT COUNT(*) AS count FROM Transplant WHERE status = 'completed'");
-    const [pendingDonors] = await db.query("SELECT COUNT(*) AS count FROM Donor WHERE donor_status = 'pending'");
-    const [pendingRequests] = await db.query("SELECT COUNT(*) AS count FROM Match_Request WHERE status = 'pending'");
+    const [users] = await db.query('SELECT COUNT(*) AS count FROM users');
+    const [orgs] = await db.query('SELECT COUNT(*) AS count FROM organization');
+    const [donors] = await db.query('SELECT COUNT(*) AS count FROM donor');
+    const [patients] = await db.query('SELECT COUNT(*) AS count FROM patient');
+    const [doctors] = await db.query('SELECT COUNT(*) AS count FROM doctor');
+    const [organs] = await db.query("SELECT COUNT(*) AS count FROM organ WHERE availability_status = 'available'");
+    const [transplants] = await db.query("SELECT COUNT(*) AS count FROM transplant WHERE status = 'completed'");
+    const [pendingDonors] = await db.query("SELECT COUNT(*) AS count FROM donor WHERE donor_status = 'pending'");
+    const [pendingRequests] = await db.query("SELECT COUNT(*) AS count FROM match_request WHERE status = 'pending'");
 
     return res.json({
       totalUsers: users[0].count,
@@ -45,11 +45,11 @@ router.get('/users', async (req, res) => {
     let sql = `
       SELECT u.user_id, u.username, u.email, u.role, u.created_at,
              COALESCE(p.name, d.name, doc.name, o.name, oh.name) AS display_name
-      FROM Users u
-      LEFT JOIN Patient p ON p.user_id = u.user_id
-      LEFT JOIN Donor d ON d.user_id = u.user_id
-      LEFT JOIN Doctor doc ON doc.user_id = u.user_id
-      LEFT JOIN Organization o ON o.user_id = u.user_id
+      FROM users u
+      LEFT JOIN patient p ON p.user_id = u.user_id
+      LEFT JOIN donor d ON d.user_id = u.user_id
+      LEFT JOIN doctor doc ON doc.user_id = u.user_id
+      LEFT JOIN organization o ON o.user_id = u.user_id
       LEFT JOIN Organization_Head oh ON oh.user_id = u.user_id
       WHERE 1=1
     `;
@@ -72,7 +72,7 @@ router.delete('/users/:id', async (req, res) => {
   const { id } = req.params;
   try {
     // Don't allow deleting other admins
-    const [check] = await db.query('SELECT role FROM Users WHERE user_id = ?', [id]);
+    const [check] = await db.query('SELECT role FROM users WHERE user_id = ?', [id]);
     if (!check.length) return res.status(404).json({ error: 'User not found' });
     if (check[0].role === 'admin') return res.status(403).json({ error: 'Cannot delete admin accounts from here' });
 
@@ -81,23 +81,23 @@ router.delete('/users/:id', async (req, res) => {
       await conn.beginTransaction();
 
       if (check[0].role === 'organization') {
-        const [orgs] = await conn.query('SELECT org_id FROM Organization WHERE user_id = ?', [id]);
+        const [orgs] = await conn.query('SELECT org_id FROM organization WHERE user_id = ?', [id]);
         if (orgs.length > 0) {
           const orgId = orgs[0].org_id;
           // Delete all users who are doctors for this org
           await conn.query(`
-            DELETE FROM Users 
-            WHERE user_id IN (SELECT user_id FROM Doctor WHERE org_id = ?)
+            DELETE FROM users 
+            WHERE user_id IN (SELECT user_id FROM doctor WHERE org_id = ?)
           `, [orgId]);
           // Delete the organization head user
           await conn.query(`
-            DELETE FROM Users 
+            DELETE FROM users 
             WHERE user_id IN (SELECT user_id FROM Organization_Head WHERE org_id = ?)
           `, [orgId]);
         }
       }
 
-      await conn.query('DELETE FROM Users WHERE user_id = ?', [id]);
+      await conn.query('DELETE FROM users WHERE user_id = ?', [id]);
       
       await conn.commit();
       return res.json({ message: 'User deleted successfully' });
@@ -122,11 +122,11 @@ router.get('/organizations', async (req, res) => {
       SELECT o.org_id, o.name, o.location, o.license_number, o.government_approved,
              u.email, u.created_at,
              oh.name AS head_name,
-             (SELECT COUNT(*) FROM Doctor d WHERE d.org_id = o.org_id) AS doctor_count,
-             (SELECT COUNT(*) FROM Organ org WHERE org.org_id = o.org_id) AS organ_count,
-             (SELECT COUNT(*) FROM Transplant t WHERE t.org_id = o.org_id) AS transplant_count
-      FROM Organization o
-      JOIN Users u ON o.user_id = u.user_id
+             (SELECT COUNT(*) FROM doctor d WHERE d.org_id = o.org_id) AS doctor_count,
+             (SELECT COUNT(*) FROM organ org WHERE org.org_id = o.org_id) AS organ_count,
+             (SELECT COUNT(*) FROM transplant t WHERE t.org_id = o.org_id) AS transplant_count
+      FROM organization o
+      JOIN users u ON o.user_id = u.user_id
       LEFT JOIN Organization_Head oh ON oh.org_id = o.org_id
       ORDER BY o.org_id DESC
     `);

@@ -31,10 +31,10 @@ router.get('/', async (req, res) => {
                 ELSE 'ended'
               END AS session_status,
               TIMESTAMPDIFF(MINUTE, s.login_time, COALESCE(s.logout_time, NOW())) AS duration_minutes
-       FROM Sessions s
-       JOIN Users u ON s.user_id = u.user_id
-       LEFT JOIN Organization o ON o.user_id = u.user_id AND o.org_id = ?
-       LEFT JOIN Doctor d ON d.user_id = u.user_id AND d.org_id = ?
+       FROM sessions s
+       JOIN users u ON s.user_id = u.user_id
+       LEFT JOIN organization o ON o.user_id = u.user_id AND o.org_id = ?
+       LEFT JOIN doctor d ON d.user_id = u.user_id AND d.org_id = ?
        LEFT JOIN Organization_Head oh ON oh.user_id = u.user_id AND oh.org_id = ?
        WHERE o.org_id IS NOT NULL
           OR d.org_id IS NOT NULL

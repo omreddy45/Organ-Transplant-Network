@@ -14,7 +14,7 @@ router.get('/analytics', async (req, res) => {
     let monthSql = `
       SELECT DATE_FORMAT(transplant_date, '%b') AS month,
              COUNT(*) AS transplants
-      FROM Transplant
+      FROM transplant
       WHERE transplant_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
     `;
     const monthParams = [];
@@ -23,7 +23,7 @@ router.get('/analytics', async (req, res) => {
 
     const [monthly] = await db.query(monthSql, monthParams);
 
-    let mixSql = 'SELECT name, SUM(quantity) AS value FROM Organ';
+    let mixSql = 'SELECT name, SUM(quantity) AS value FROM organ';
     const mixParams = [];
     if (org_id) { mixSql += ' WHERE org_id = ?'; mixParams.push(org_id); }
     mixSql += ' GROUP BY name';
@@ -32,8 +32,8 @@ router.get('/analytics', async (req, res) => {
     const [growth] = await db.query(`
       SELECT DATE_FORMAT(u.created_at, '%b') AS month,
              COUNT(*) AS donors
-      FROM Donor d
-      JOIN Users u ON d.user_id = u.user_id
+      FROM donor d
+      JOIN users u ON d.user_id = u.user_id
       WHERE u.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
       GROUP BY YEAR(u.created_at), MONTH(u.created_at)
       ORDER BY MIN(u.created_at)
@@ -60,14 +60,14 @@ router.get('/', async (req, res) => {
              t.organ_id, o.name AS organ_name,
              o.donor_id, dn.name AS donor_name, du.email AS donor_email,
              t.org_id, org.name AS organization_name
-      FROM Transplant t
-      JOIN Patient p ON t.patient_id = p.patient_id
-      JOIN Users pu ON p.user_id = pu.user_id
-      JOIN Doctor d ON t.doctor_id = d.doctor_id
-      JOIN Organ o ON t.organ_id = o.organ_id
-      JOIN Organization org ON t.org_id = org.org_id
-      LEFT JOIN Donor dn ON o.donor_id = dn.donor_id
-      LEFT JOIN Users du ON dn.user_id = du.user_id
+      FROM transplant t
+      JOIN patient p ON t.patient_id = p.patient_id
+      JOIN users pu ON p.user_id = pu.user_id
+      JOIN doctor d ON t.doctor_id = d.doctor_id
+      JOIN organ o ON t.organ_id = o.organ_id
+      JOIN organization org ON t.org_id = org.org_id
+      LEFT JOIN donor dn ON o.donor_id = dn.donor_id
+      LEFT JOIN users du ON dn.user_id = du.user_id
       WHERE 1=1
     `;
     const params = [];
@@ -99,7 +99,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: transplant_date, patient_id, doctor_id, organ_id, and org_id are all required.' });
     }
 
-    const [organs] = await db.query("SELECT availability_status FROM Organ WHERE organ_id = ?", [organ_id]);
+    const [organs] = await db.query("SELECT availability_status FROM organ WHERE organ_id = ?", [organ_id]);
     if (!organs.length) {
       return res.status(404).json({ error: 'Organ not found.' });
     }
@@ -108,12 +108,12 @@ router.post('/', async (req, res) => {
     }
 
     const [result] = await db.query(
-      `INSERT INTO Transplant (transplant_date, status, bill_amount, patient_id, doctor_id, organ_id, org_id)
+      `INSERT INTO transplant (transplant_date, status, bill_amount, patient_id, doctor_id, organ_id, org_id)
        VALUES (?, 'pending', ?, ?, ?, ?, ?)`,
       [transplant_date, bill_amount || 0, patient_id, doctor_id, organ_id, org_id]
     );
 
-    await db.query("UPDATE Organ SET availability_status = 'reserved' WHERE organ_id = ?", [organ_id]);
+    await db.query("UPDATE organ SET availability_status = 'reserved' WHERE organ_id = ?", [organ_id]);
 
     return res.status(201).json({ message: 'Transplant record created', transplant_id: result.insertId });
   } catch (err) {
@@ -148,26 +148,26 @@ router.put('/:id', async (req, res) => {
     }
 
     params.push(id);
-    await db.query(`UPDATE Transplant SET ${fields.join(', ')} WHERE transplant_id = ?`, params);
+    await db.query(`UPDATE transplant SET ${fields.join(', ')} WHERE transplant_id = ?`, params);
 
     if (status === 'completed') {
-      const [rows] = await db.query('SELECT organ_id FROM Transplant WHERE transplant_id = ?', [id]);
+      const [rows] = await db.query('SELECT organ_id FROM transplant WHERE transplant_id = ?', [id]);
       if (rows.length) {
-        await db.query("UPDATE Organ SET availability_status = 'transplanted' WHERE organ_id = ?", [rows[0].organ_id]);
+        await db.query("UPDATE organ SET availability_status = 'transplanted' WHERE organ_id = ?", [rows[0].organ_id]);
       }
     }
 
     if (status === 'cancelled') {
-      const [rows] = await db.query('SELECT organ_id FROM Transplant WHERE transplant_id = ?', [id]);
+      const [rows] = await db.query('SELECT organ_id FROM transplant WHERE transplant_id = ?', [id]);
       if (rows.length) {
-        await db.query("UPDATE Organ SET availability_status = 'available' WHERE organ_id = ?", [rows[0].organ_id]);
+        await db.query("UPDATE organ SET availability_status = 'available' WHERE organ_id = ?", [rows[0].organ_id]);
       }
     }
 
     return res.json({ message: 'Transplant updated' });
   } catch (err) {
     console.error('PUT /api/transplants/:id error:', err);
-    return res.status(500).json({ error: `Failed to update transplant: ${err.message}` });
+    return res.status(500).json({ error: `Failed to UPDATE transplant: ${err.message}` });
   }
 });
 

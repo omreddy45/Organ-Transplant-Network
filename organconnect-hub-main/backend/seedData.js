@@ -51,11 +51,11 @@ async function main() {
 
         // Org User
         const [oRes] = await conn.query(
-            "INSERT INTO Users (username, email, password_hash, role) VALUES (?, ?, ?, 'organization')",
+            "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'organization')",
             [orgUName, orgEmail, bcrypt.hashSync(orgEmail, 10)]
         );
         const [orgRes] = await conn.query(
-            "INSERT INTO Organization (user_id, name, location, license_number, government_approved) VALUES (?, ?, ?, ?, 1)",
+            "INSERT INTO organization (user_id, name, location, license_number, government_approved) VALUES (?, ?, ?, ?, 1)",
             [oRes.insertId, org.name, org.loc, org.license]
         );
         const orgId = orgRes.insertId;
@@ -64,7 +64,7 @@ async function main() {
         // Head User
         const headEmail = org.name.replace(/\s+/g, '') + "Head@gmail.com";
         const [hRes] = await conn.query(
-            "INSERT INTO Users (username, email, password_hash, role) VALUES (?, ?, ?, 'organization')",
+            "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'organization')",
             [headEmail.split('@')[0], headEmail, bcrypt.hashSync(headEmail, 10)]
         );
         await conn.query(
@@ -77,11 +77,11 @@ async function main() {
         for (let d = 1; d <= dCount; d++) {
             const docEmail = `doc_${orgId}_${d}@gmail.com`;
             const [duRes] = await conn.query(
-                "INSERT INTO Users (username, email, password_hash, role) VALUES (?, ?, ?, 'doctor')",
+                "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'doctor')",
                 [`doc_${orgId}_${d}`, docEmail, bcrypt.hashSync(docEmail, 10)]
             );
             const [docRes] = await conn.query(
-                "INSERT INTO Doctor (user_id, name, specialization, org_id) VALUES (?, ?, ?, ?)",
+                "INSERT INTO doctor (user_id, name, specialization, org_id) VALUES (?, ?, ?, ?)",
                 [duRes.insertId, `Dr. Expert ${d}`, specs[Math.floor(Math.random() * specs.length)], orgId]
             );
             docIds.push(docRes.insertId);
@@ -94,11 +94,11 @@ async function main() {
     for(let i = 1; i <= 15; i++) {
         const email = `donor${i}@gmail.com`;
         const [uRes] = await conn.query(
-            "INSERT INTO Users (username, email, password_hash, role) VALUES (?, ?, ?, 'donor')",
+            "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'donor')",
             [`donor${i}`, email, bcrypt.hashSync(email, 10)]
         );
         const [dRes] = await conn.query(
-            "INSERT INTO Donor (user_id, name, dob, donation_reason) VALUES (?, ?, ?, ?)",
+            "INSERT INTO donor (user_id, name, dob, donation_reason) VALUES (?, ?, ?, ?)",
             [uRes.insertId, `Donor ${i}`, '1990-01-01', 'Wanted to save lives']
         );
         donorIds.push(dRes.insertId);
@@ -108,7 +108,7 @@ async function main() {
         const oType = organTypes[Math.floor(Math.random() * organTypes.length)];
         
         const [oRes] = await conn.query(
-            "INSERT INTO Organ (name, quantity, availability_status, donor_id, org_id) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO organ (name, quantity, availability_status, donor_id, org_id) VALUES (?, ?, ?, ?, ?)",
             [oType, 1, 'available', dRes.insertId, orgAssignId]
         );
         organIds.push({id: oRes.insertId, org_id: orgAssignId});
@@ -119,11 +119,11 @@ async function main() {
     for(let i = 1; i <= 15; i++) {
         const email = `patient${i}@gmail.com`;
         const [uRes] = await conn.query(
-            "INSERT INTO Users (username, email, password_hash, role) VALUES (?, ?, ?, 'patient')",
+            "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'patient')",
             [`patient${i}`, email, bcrypt.hashSync(email, 10)]
         );
         const [pRes] = await conn.query(
-            "INSERT INTO Patient (user_id, name, dob, city, state) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO patient (user_id, name, dob, city, state) VALUES (?, ?, ?, ?, ?)",
             [uRes.insertId, `Patient ${i}`, '1985-06-15', 'Pune', 'Maharashtra']
         );
         patientIds.push(pRes.insertId);
@@ -135,14 +135,14 @@ async function main() {
         const targetOrgan = organIds[i];
         if (!targetOrgan) continue;
 
-        await conn.query("UPDATE Organ SET availability_status = 'transplanted' WHERE organ_id = ?", [targetOrgan.id]);
+        await conn.query("UPDATE organ SET availability_status = 'transplanted' WHERE organ_id = ?", [targetOrgan.id]);
         
         // assign transplant record
         const docId = docIds[Math.floor(Math.random() * docIds.length)]; // random doctor
         const patId = patientIds[i]; // assign one patient
         
         await conn.query(
-            "INSERT INTO Transplant (transplant_date, status, bill_amount, patient_id, doctor_id, organ_id, org_id) VALUES (CURDATE(), 'completed', ?, ?, ?, ?, ?)",
+            "INSERT INTO transplant (transplant_date, status, bill_amount, patient_id, doctor_id, organ_id, org_id) VALUES (CURDATE(), 'completed', ?, ?, ?, ?, ?)",
             [Math.floor(Math.random() * 500000) + 100000, patId, docId, targetOrgan.id, targetOrgan.org_id]
         );
     }

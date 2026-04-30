@@ -9,7 +9,7 @@ router.post('/', async (req, res) => {
   try {
     // Check for existing active request
     const [existing] = await db.query(
-      "SELECT * FROM Match_Request WHERE patient_id = ? AND organ_type = ? AND status IN ('pending', 'matched')",
+      "SELECT * FROM match_request WHERE patient_id = ? AND organ_type = ? AND status IN ('pending', 'matched')",
       [patient_id, organ_type]
     );
     if (existing.length > 0) {
@@ -17,7 +17,7 @@ router.post('/', async (req, res) => {
     }
 
     const [result] = await db.query(
-      "INSERT INTO Match_Request (patient_id, organ_type, urgency_level, status) VALUES (?, ?, ?, 'pending')",
+      "INSERT INTO match_request (patient_id, organ_type, urgency_level, status) VALUES (?, ?, ?, 'pending')",
       [patient_id, organ_type, urgency_level || 'normal']
     );
     res.json({ message: 'Request submitted', request_id: result.insertId });
@@ -33,8 +33,8 @@ router.get('/', async (req, res) => {
   try {
     let sql = `
       SELECT m.*, p.name as patient_name 
-      FROM Match_Request m 
-      JOIN Patient p ON m.patient_id = p.patient_id
+      FROM match_request m 
+      JOIN patient p ON m.patient_id = p.patient_id
       WHERE 1=1
     `;
     const params = [];
@@ -57,25 +57,25 @@ router.post('/:id/assign', async (req, res) => {
     await conn.beginTransaction();
 
     // 1. Get Match Request
-    const [reqs] = await conn.query("SELECT * FROM Match_Request WHERE request_id = ?", [id]);
+    const [reqs] = await conn.query("SELECT * FROM match_request WHERE request_id = ?", [id]);
     if (!reqs.length) throw new Error("Request not found");
     const mReq = reqs[0];
     if (mReq.status !== 'pending') throw new Error("Request already assigned/completed");
 
     // 2. Update Match Request to matched
-    await conn.query("UPDATE Match_Request SET status = 'matched' WHERE request_id = ?", [id]);
+    await conn.query("UPDATE match_request SET status = 'matched' WHERE request_id = ?", [id]);
 
     // 2.5 Check Organ availability
-    const [organs] = await conn.query("SELECT availability_status FROM Organ WHERE organ_id = ?", [organ_id]);
+    const [organs] = await conn.query("SELECT availability_status FROM organ WHERE organ_id = ?", [organ_id]);
     if (!organs.length) throw new Error("Organ not found");
     if (organs[0].availability_status !== 'available') throw new Error("Organ is already reserved or transplanted");
 
-    // 3. Update Organ to 'reserved'
-    await conn.query("UPDATE Organ SET availability_status = 'reserved' WHERE organ_id = ?", [organ_id]);
+    // 3. UPDATE organ to 'reserved'
+    await conn.query("UPDATE organ SET availability_status = 'reserved' WHERE organ_id = ?", [organ_id]);
 
     // 4. Create Transplant record with status 'pending'
     await conn.query(
-      "INSERT INTO Transplant (transplant_date, status, bill_amount, patient_id, doctor_id, organ_id, org_id) VALUES (CURDATE(), 'pending', 0, ?, ?, ?, ?)",
+      "INSERT INTO transplant (transplant_date, status, bill_amount, patient_id, doctor_id, organ_id, org_id) VALUES (CURDATE(), 'pending', 0, ?, ?, ?, ?)",
       [mReq.patient_id, doctor_id, organ_id, org_id]
     );
 
@@ -100,7 +100,7 @@ router.post('/:id/assign', async (req, res) => {
 router.post('/:id/reject', async (req, res) => {
   const { id } = req.params;
   try {
-    await db.query("UPDATE Match_Request SET status = 'rejected' WHERE request_id = ?", [id]);
+    await db.query("UPDATE match_request SET status = 'rejected' WHERE request_id = ?", [id]);
     res.json({ message: 'Request rejected' });
   } catch(err) {
     console.error(err);
@@ -112,12 +112,12 @@ router.post('/:id/reject', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const [rows] = await db.query("SELECT status FROM Match_Request WHERE request_id = ?", [id]);
+    const [rows] = await db.query("SELECT status FROM match_request WHERE request_id = ?", [id]);
     if (!rows.length) return res.status(404).json({ error: 'Request not found' });
     if (rows[0].status !== 'pending') {
       return res.status(400).json({ error: 'Only pending requests can be deleted.' });
     }
-    await db.query("DELETE FROM Match_Request WHERE request_id = ?", [id]);
+    await db.query("DELETE FROM match_request WHERE request_id = ?", [id]);
     res.json({ message: 'Request deleted successfully' });
   } catch(err) {
     console.error(err);
