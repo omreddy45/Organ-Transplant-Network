@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
                p.street, p.medical_insurance, u.email,
                MAX(a.visit_date) AS last_visit
         FROM patient p
-        JOIN Attends a ON p.patient_id = a.patient_id
+        JOIN attends a ON p.patient_id = a.patient_id
         JOIN users u ON p.user_id = u.user_id
         WHERE a.doctor_id = ?
         GROUP BY p.patient_id, p.name, p.dob, p.city, p.state, p.street, p.medical_insurance, u.email
@@ -60,7 +60,7 @@ router.get('/:id/schedule', async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT a.visit_date, a.doctor_id, d.name AS doctor_name, org.name AS organization_name
-      FROM Attends a
+      FROM attends a
       JOIN doctor d ON a.doctor_id = d.doctor_id
       JOIN organization org ON d.org_id = org.org_id
       WHERE a.patient_id = ?

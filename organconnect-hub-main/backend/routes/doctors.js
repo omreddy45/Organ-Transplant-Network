@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
       doc.phones = phones.map(p => p.phone);
 
       const [visits] = await db.query(
-        'SELECT MAX(visit_date) AS last_visit FROM Attends WHERE doctor_id = ?',
+        'SELECT MAX(visit_date) AS last_visit FROM attends WHERE doctor_id = ?',
         [doc.doctor_id]
       );
       doc.last_visit = visits[0]?.last_visit || null;
@@ -77,7 +77,7 @@ router.get('/:id/schedule', async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT a.visit_date, a.patient_id, p.name AS patient_name
-      FROM Attends a
+      FROM attends a
       JOIN patient p ON a.patient_id = p.patient_id
       WHERE a.doctor_id = ?
       ORDER BY a.visit_date DESC
@@ -103,7 +103,7 @@ router.post('/visit', async (req, res) => {
 
   try {
     await db.query(
-      'INSERT INTO Attends (doctor_id, patient_id, visit_date) VALUES (?, ?, ?)',
+      'INSERT INTO attends (doctor_id, patient_id, visit_date) VALUES (?, ?, ?)',
       [doctor_id, patient_id, visit_date]
     );
     return res.status(201).json({ message: 'Visit booked' });
