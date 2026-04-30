@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 
 async function testRestore() {
   try {
-    const [rows] = await db.query('SELECT * FROM deleted_records_audit WHERE table_name = "users" LIMIT 1');
+    const [rows] = await db.query(`SELECT * FROM deleted_records_audit WHERE table_name = 'users' LIMIT 1`);
     if (!rows.length) {
       console.log('No user records to restore');
       process.exit();
