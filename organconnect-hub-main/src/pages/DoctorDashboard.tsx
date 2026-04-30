@@ -43,7 +43,7 @@ const DoctorDashboard = () => {
       api.transplants.list({ doctor_id: String(doctorId) }),
       api.doctors.schedule(doctorId),
       api.patients.list({ doctor_id: String(doctorId) }),
-      orgId ? fetch(`/api/auth/org/${orgId}`).then(r => r.ok ? r.json() : { name: "" }) : Promise.resolve({ name: "" })
+      orgId ? fetch(`https://organ-transplant-network.onrender.com/api/auth/org/${orgId}`).then(r => r.ok ? r.json() : { name: "" }) : Promise.resolve({ name: "" })
     ]).then(([trRes, schRes, patRes, orgRes]) => {
       const trData = trRes.status === 'fulfilled' ? trRes.value : [];
       setTransplants(trData);

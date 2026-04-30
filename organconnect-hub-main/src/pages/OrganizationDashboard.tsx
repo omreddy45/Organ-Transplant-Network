@@ -94,11 +94,11 @@ const OrganizationDashboard = () => {
     if (!orgId) return;
     setLoading(true);
     Promise.allSettled([
-      fetch(`/api/organs/inventory?org_id=${orgId}`).then(r => r.json()),
-      fetch(`/api/doctors?org_id=${orgId}`).then(r => r.json()),
-      fetch(`/api/transplants?org_id=${orgId}`).then(r => r.json()),
-      fetch(`/api/transplants/analytics?org_id=${orgId}`).then(r => r.json()),
-      fetch(`/api/auth/head/${orgId}`).then(r => r.ok ? r.json() : null),
+      fetch(`https://organ-transplant-network.onrender.com/api/organs/inventory?org_id=${orgId}`).then(r => r.json()),
+      fetch(`https://organ-transplant-network.onrender.com/api/doctors?org_id=${orgId}`).then(r => r.json()),
+      fetch(`https://organ-transplant-network.onrender.com/api/transplants?org_id=${orgId}`).then(r => r.json()),
+      fetch(`https://organ-transplant-network.onrender.com/api/transplants/analytics?org_id=${orgId}`).then(r => r.json()),
+      fetch(`https://organ-transplant-network.onrender.com/api/auth/head/${orgId}`).then(r => r.ok ? r.json() : null),
       api.donors.list({ status: "pending" }),
       api.donors.listPledges({ org_id: orgId }),
       api.matchRequests.list({ status: "pending" }),
@@ -137,7 +137,7 @@ const OrganizationDashboard = () => {
     }
 
     if (editing) {
-      fetch(`/api/organs/${editing.organ_id}`, {
+      fetch(`https://organ-transplant-network.onrender.com/api/organs/${editing.organ_id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: formName, quantity: formQty, donor_id: formDonor ? Number(formDonor) : null, availability_status: formAvailability }),
       }).then(() => {
@@ -147,7 +147,7 @@ const OrganizationDashboard = () => {
         toast.success("Organ updated");
       });
     } else {
-      fetch('/api/organs/add', {
+      fetch('https://organ-transplant-network.onrender.com/api/organs/add', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: formName, quantity: formQty, donor_id: formDonor ? Number(formDonor) : null, org_id: orgId, availability_status: formAvailability }),
       }).then(r => r.json()).then(data => {
@@ -162,13 +162,13 @@ const OrganizationDashboard = () => {
     setDrawerOpen(false);
   };
   const deleteOrgan = (id: number) => {
-    fetch(`/api/organs/${id}`, { method: 'DELETE' }).then(() => {
+    fetch(`https://organ-transplant-network.onrender.com/api/organs/${id}`, { method: 'DELETE' }).then(() => {
       setInventory((arr) => arr.filter((o) => o.organ_id !== id));
       toast.success("Organ removed");
     });
   };
   const changeDoctorStatus = (id: number, status: DoctorAvailability) => {
-    fetch(`/api/doctors/${id}/status`, {
+    fetch(`https://organ-transplant-network.onrender.com/api/doctors/${id}/status`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ availability_status: status })
     }).then(r => r.json()).then(data => {
@@ -178,14 +178,14 @@ const OrganizationDashboard = () => {
     }).catch(e => toast.error(e.message));
   };
   const removeDoctor = (id: number) => {
-    fetch(`/api/doctors/${id}`, { method: 'DELETE' }).then(r => r.json()).then(data => {
+    fetch(`https://organ-transplant-network.onrender.com/api/doctors/${id}`, { method: 'DELETE' }).then(r => r.json()).then(data => {
       if (data.error) throw new Error(data.error);
       setDoctorList((arr) => arr.filter(d => d.doctor_id !== id));
       toast.success("Doctor removed from organization");
     }).catch(e => toast.error(e.message));
   };
   const removeHead = () => {
-    fetch(`/api/auth/head/${orgId}`, { method: 'DELETE' }).then(r => r.json()).then(data => {
+    fetch(`https://organ-transplant-network.onrender.com/api/auth/head/${orgId}`, { method: 'DELETE' }).then(r => r.json()).then(data => {
       if (data.error) throw new Error(data.error);
       setHeadName(null);
       toast.success("Head account removed");
@@ -194,7 +194,7 @@ const OrganizationDashboard = () => {
 
   const submitTransplantUpdate = () => {
     if (!editingTransplant) return;
-    fetch(`/api/transplants/${editingTransplant.transplant_id}`, {
+    fetch(`https://organ-transplant-network.onrender.com/api/transplants/${editingTransplant.transplant_id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: formStatus, bill_amount: Number(formBill) })
@@ -306,7 +306,7 @@ const OrganizationDashboard = () => {
                           }
                           api.donors.approvePledge(p.pledge_id).then(() => {
                             setPendingPledges(prev => prev.filter(x => x.pledge_id !== p.pledge_id));
-                            fetch(`/api/organs/inventory?org_id=${orgId}`).then(r => r.json()).then(setInventory);
+                            fetch(`https://organ-transplant-network.onrender.com/api/organs/inventory?org_id=${orgId}`).then(r => r.json()).then(setInventory);
                             toast.success('Pledge Verified! Organ added directly into your hospital Inventory.');
                           }).catch(e => toast.error(e.message));
                         }}>Verify & Add Organ</Button>
@@ -400,7 +400,7 @@ const OrganizationDashboard = () => {
                               }).then(() => {
                                 setMatchRequests(prev => prev.filter(x => x.request_id !== r.request_id));
                                 setInventory(prev => prev.map(o => o.organ_id === autoOrgan.organ_id ? {...o, availability_status: "reserved" as any} : o));
-                                fetch(`/api/transplants?org_id=${orgId}`).then(r => r.json()).then(setTransplantList);
+                                fetch(`https://organ-transplant-network.onrender.com/api/transplants?org_id=${orgId}`).then(r => r.json()).then(setTransplantList);
                                 toast.success("Organ successfully assigned to patient! Procedure scheduled.");
                               }).catch(e => toast.error(e.message));
                             }}>Confirm Assignment</Button>
@@ -623,7 +623,7 @@ const OrganizationDashboard = () => {
                       if (!/^\S+@\S+\.\S+$/.test(emailEl.value)) {
                          return toast.error('Please enter a valid email address');
                       }
-                      fetch('/api/auth/signup', {
+                      fetch('https://organ-transplant-network.onrender.com/api/auth/signup', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ name: nameEl.value, email: emailEl.value, password: pwdEl.value, role: 'doctor', specialization: specEl.value, phoneNumber: phoneEl.value || undefined, org_id: orgId, _orgCreated: true })
                       }).then(r => r.json()).then(data => {

@@ -472,7 +472,7 @@ const PatientDashboard = () => {
                            // Set the visit date to next week for a manual booking
                            const fd = new Date();
                            fd.setDate(fd.getDate() + 7);
-                           fetch('/api/doctors/visit', {
+                           fetch('https://organ-transplant-network.onrender.com/api/doctors/visit', {
                              method: 'POST', headers: { 'Content-Type': 'application/json' },
                              body: JSON.stringify({ doctor_id: d.doctor_id, patient_id: patientId, visit_date: fd.toISOString().split('T')[0] })
                            }).then(r => r.json()).then(data => {

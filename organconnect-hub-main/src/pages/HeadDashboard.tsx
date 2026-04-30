@@ -52,10 +52,10 @@ const HeadDashboard = () => {
     if (!orgId) return;
     setLoading(true);
     Promise.allSettled([
-      fetch(`/api/doctors?org_id=${orgId}`).then(r => r.json()),
-      fetch(`/api/transplants?org_id=${orgId}`).then(r => r.json()),
-      fetch(`/api/transplants/analytics?org_id=${orgId}`).then(r => r.json()),
-      fetch(`/api/auth/org/${orgId}`).then(r => r.ok ? r.json() : { name: "" })
+      fetch(`https://organ-transplant-network.onrender.com/api/doctors?org_id=${orgId}`).then(r => r.json()),
+      fetch(`https://organ-transplant-network.onrender.com/api/transplants?org_id=${orgId}`).then(r => r.json()),
+      fetch(`https://organ-transplant-network.onrender.com/api/transplants/analytics?org_id=${orgId}`).then(r => r.json()),
+      fetch(`https://organ-transplant-network.onrender.com/api/auth/org/${orgId}`).then(r => r.ok ? r.json() : { name: "" })
     ]).then(([docRes, trRes, anRes, orgRes]) => {
       if (docRes.status === 'fulfilled') setDoctorList(docRes.value);
       if (trRes.status === 'fulfilled') setTransplantList(trRes.value);
@@ -66,7 +66,7 @@ const HeadDashboard = () => {
   }, [orgId]);
 
   const changeDoctorStatus = (id: number, status: DoctorAvailability) => { 
-    fetch(`/api/doctors/${id}/status`, {
+    fetch(`https://organ-transplant-network.onrender.com/api/doctors/${id}/status`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ availability_status: status })
     }).then(r => r.json()).then(data => {

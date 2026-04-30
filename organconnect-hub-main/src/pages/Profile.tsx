@@ -83,7 +83,7 @@ const Profile = () => {
   useEffect(() => {
     if (!user) return;
 
-    fetch(`/api/profile?user_id=${user.id}`)
+    fetch(`https://organ-transplant-network.onrender.com/api/profile?user_id=${user.id}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data) {
@@ -112,7 +112,7 @@ const Profile = () => {
 
     if (user?.role === "organization") {
       const oid = user.orgId || user.roleId;
-      fetch(`/api/auth/head/${oid}`).then(r => r.ok ? r.json() : null).then(d => {
+      fetch(`https://organ-transplant-network.onrender.com/api/auth/head/${oid}`).then(r => r.ok ? r.json() : null).then(d => {
         if (d) setHeadData(d);
       });
     }
@@ -145,7 +145,7 @@ const Profile = () => {
       Object.assign(payload, { location, license, orgName });
     }
 
-    fetch('/api/profile/update', {
+    fetch('https://organ-transplant-network.onrender.com/api/profile/update', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -163,7 +163,7 @@ const Profile = () => {
     if (newPwd !== confirmPwd) return toast.error("New passwords don't match");
     if (newPwd.length < 8) return toast.error("Password must be 8+ characters");
     
-    fetch('/api/profile/password', {
+    fetch('https://organ-transplant-network.onrender.com/api/profile/password', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: user?.id, currentPassword: currentPwd, newPassword: newPwd })
@@ -180,7 +180,7 @@ const Profile = () => {
   const deleteAccount = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/profile?user_id=${user.id}`, { method: 'DELETE' });
+      const res = await fetch(`https://organ-transplant-network.onrender.com/api/profile?user_id=${user.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Delete failed');
       logout();
@@ -299,7 +299,7 @@ const Profile = () => {
                         if (!/^\S+@\S+\.\S+$/.test(emailEl.value)) {
                            return toast.error("Please enter a valid email address for the head account");
                         }
-                        fetch('/api/auth/add-head', {
+                        fetch('https://organ-transplant-network.onrender.com/api/auth/add-head', {
                           method: 'POST', headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ name: nameEl.value, email: emailEl.value, password: pwdEl.value, org_id: user.orgId || user.roleId })
                         }).then(r => r.json()).then(data => {
