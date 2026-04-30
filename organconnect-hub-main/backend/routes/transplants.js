@@ -137,7 +137,11 @@ router.put('/:id', async (req, res) => {
     const params = [];
 
     if (status) { fields.push('status = ?'); params.push(status); }
-    if (bill_amount !== undefined) { fields.push('bill_amount = ?'); params.push(bill_amount); }
+    if (bill_amount !== undefined) { 
+      if (Number(bill_amount) < 0) return res.status(400).json({ error: 'Bill amount cannot be negative.' });
+      fields.push('bill_amount = ?'); 
+      params.push(bill_amount); 
+    }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: 'Please provide at least one field to update (status or bill_amount).' });

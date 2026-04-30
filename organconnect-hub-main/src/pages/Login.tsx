@@ -9,6 +9,14 @@ import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
 import { useAuth, Role } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -17,6 +25,29 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const handleReset = async () => {
+    if (!forgotEmail || !newPassword) {
+      return toast.error("Please provide both email and a new password.");
+    }
+    setResetLoading(true);
+    try {
+      await api.auth.resetPassword(forgotEmail, newPassword);
+      toast.success("Password reset successfully. You can now log in.");
+      setForgotOpen(false);
+      setForgotEmail("");
+      setNewPassword("");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to reset password.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,7 +158,13 @@ const Login = () => {
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox /> Remember me
               </label>
-              <a className="text-sm text-primary hover:underline" href="#">Forgot password?</a>
+              <button 
+                type="button"
+                onClick={() => setForgotOpen(true)}
+                className="text-sm text-primary hover:underline"
+              >
+                Forgot password?
+              </button>
             </div>
 
             <Button
@@ -138,7 +175,49 @@ const Login = () => {
             </Button>
           </form>
 
-
+          <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+            <DialogContent className="rounded-2xl sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Reset Password</DialogTitle>
+                <DialogDescription>
+                  Enter your email address and your new desired password to instantly reset it.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="forgotEmail">Email Address</Label>
+                  <Input
+                    id="forgotEmail"
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="newPassword">New Password</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" className="rounded-xl" onClick={() => setForgotOpen(false)}>
+                  Cancel
+                </Button>
+                <Button className="rounded-xl bg-gradient-primary" onClick={handleReset} disabled={resetLoading}>
+                  {resetLoading ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+                  Reset Password
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

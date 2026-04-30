@@ -321,24 +321,56 @@ const PatientDashboard = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Request Date</TableHead>
-                  <TableHead>Organ</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Organ Type</TableHead>
                   <TableHead>Urgency</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Status & Details</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {matchRequests.map((r: any) => (
+                {matchRequests.map((r: any) => {
+                  const matchedTransplant = r.status === 'matched' || r.status === 'completed' ? transplants.find((t: any) => t.organ_name.toLowerCase() === r.organ_type.toLowerCase()) : null;
+                  
+                  return (
                   <TableRow key={r.request_id}>
                     <TableCell>{new Date(r.request_date).toLocaleDateString()}</TableCell>
                     <TableCell className="font-semibold">{r.organ_type}</TableCell>
                     <TableCell><StatusBadge status={r.urgency_level} /></TableCell>
-                    <TableCell><StatusBadge status={r.status} /></TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <StatusBadge status={r.status} />
+                        {matchedTransplant && (
+                          <span className="text-xs text-muted-foreground">{matchedTransplant.organization_name}</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.status === 'pending' && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive text-xs h-8"
+                          onClick={async () => {
+                            if (!confirm("Are you sure you want to withdraw this request?")) return;
+                            try {
+                              await api.matchRequests.delete(r.request_id);
+                              setMatchRequests(prev => prev.filter(x => x.request_id !== r.request_id));
+                              toast.success("Request withdrawn successfully.");
+                            } catch (e: any) {
+                              toast.error(e.message || "Failed to withdraw request");
+                            }
+                          }}
+                        >
+                          Withdraw
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
-                ))}
+                )})}
                 {matchRequests.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground h-24">You do not have any active organ match requests.</TableCell>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground h-24">You do not have any active organ match requests.</TableCell>
                   </TableRow>
                 )}
               </TableBody>

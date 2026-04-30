@@ -76,8 +76,37 @@ router.delete('/users/:id', async (req, res) => {
     if (!check.length) return res.status(404).json({ error: 'User not found' });
     if (check[0].role === 'admin') return res.status(403).json({ error: 'Cannot delete admin accounts from here' });
 
-    await db.query('DELETE FROM Users WHERE user_id = ?', [id]);
-    return res.json({ message: 'User deleted successfully' });
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      if (check[0].role === 'organization') {
+        const [orgs] = await conn.query('SELECT org_id FROM Organization WHERE user_id = ?', [id]);
+        if (orgs.length > 0) {
+          const orgId = orgs[0].org_id;
+          // Delete all users who are doctors for this org
+          await conn.query(`
+            DELETE FROM Users 
+            WHERE user_id IN (SELECT user_id FROM Doctor WHERE org_id = ?)
+          `, [orgId]);
+          // Delete the organization head user
+          await conn.query(`
+            DELETE FROM Users 
+            WHERE user_id IN (SELECT user_id FROM Organization_Head WHERE org_id = ?)
+          `, [orgId]);
+        }
+      }
+
+      await conn.query('DELETE FROM Users WHERE user_id = ?', [id]);
+      
+      await conn.commit();
+      return res.json({ message: 'User deleted successfully' });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   } catch (err) {
     console.error('DELETE /api/admin/users/:id error:', err);
     return res.status(500).json({ error: `Failed to delete user: ${err.message}` });
@@ -125,11 +154,15 @@ router.get('/audit-log', async (req, res) => {
 
 // ──────────────────────────────────────────────
 // POST /api/admin/audit-log/:id/restore — Restore a deleted record
+// When restoring a 'users' record, automatically restores all
+// associated role-specific records (patient/donor/doctor/org/org_head)
+// that were cascade-deleted alongside the user.
 // ──────────────────────────────────────────────
 router.post('/audit-log/:id/restore', async (req, res) => {
   const { id } = req.params;
+  const conn = await db.getConnection();
   try {
-    const [rows] = await db.query('SELECT * FROM deleted_records_audit WHERE audit_id = ?', [id]);
+    const [rows] = await conn.query('SELECT * FROM deleted_records_audit WHERE audit_id = ?', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Audit record not found' });
     
     const record = rows[0];
@@ -141,17 +174,100 @@ router.post('/audit-log/:id/restore', async (req, res) => {
     }
 
     const table = record.table_name;
-    const keys = Object.keys(data).filter(k => data[k] !== 'null');
-    const values = keys.map(k => data[k] === 'null' ? null : data[k]);
-    const placeholders = keys.map(() => '?').join(', ');
 
-    const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`;
-    
-    await db.query(sql, values);
-    await db.query('DELETE FROM deleted_records_audit WHERE audit_id = ?', [id]);
-    
+    // Helper: insert a parsed audit record into its table
+    const insertRecord = async (connection, tableName, recordData) => {
+      const keys = Object.keys(recordData).filter(k => recordData[k] !== 'null' && recordData[k] !== null && recordData[k] !== '');
+      const values = keys.map(k => recordData[k]);
+
+      if (tableName.toLowerCase() === 'users') {
+        const idx = keys.findIndex(k => k.toLowerCase() === 'password_hash');
+        const defaultHash = await bcrypt.hash('restored123', 10);
+        if (idx === -1) {
+          keys.push('password_hash');
+          values.push(defaultHash);
+        } else if (!values[idx]) {
+          values[idx] = defaultHash;
+        }
+      }
+
+      const placeholders = keys.map(() => '?').join(', ');
+      const sql = `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders})`;
+      await connection.query(sql, values);
+    };
+
+    await conn.beginTransaction();
+
+    if (table.toLowerCase() === 'users') {
+      // ── Step 1: Restore the users row first ──
+      await insertRecord(conn, table, data);
+
+      const userId = data.user_id;
+      const role = data.role;
+
+      // ── Step 2: Find and restore associated role-specific records ──
+      // These were cascade-deleted and backed up by the role-specific triggers.
+      // The restoration order matters: parent tables first (organization before org_head).
+      const roleTableOrder = {
+        patient:      ['patient'],
+        donor:        ['donor'],
+        doctor:       ['doctor'],
+        organization: ['organization', 'organization_head'],
+      };
+
+      const tablesToRestore = roleTableOrder[role] || [];
+      const restoredAuditIds = [id]; // Track all audit IDs to clean up
+
+      for (const childTable of tablesToRestore) {
+        // Find audit records for this table that belong to the deleted user
+        const [childRows] = await conn.query(
+          'SELECT * FROM deleted_records_audit WHERE table_name = ? ORDER BY audit_id ASC',
+          [childTable]
+        );
+
+        for (const childRecord of childRows) {
+          let childData;
+          try {
+            childData = JSON.parse(childRecord.record_data);
+          } catch (_) {
+            continue; // Skip unparseable records
+          }
+
+          // Match by user_id in the stored record data
+          if (String(childData.user_id) === String(userId)) {
+            try {
+              await insertRecord(conn, childTable, childData);
+              restoredAuditIds.push(childRecord.audit_id);
+            } catch (insertErr) {
+              // If it's a duplicate (already restored), just skip and still clean up audit
+              if (insertErr.code === 'ER_DUP_ENTRY') {
+                restoredAuditIds.push(childRecord.audit_id);
+              } else {
+                throw insertErr;
+              }
+            }
+          }
+        }
+      }
+
+      // ── Step 3: Clean up all restored audit records ──
+      if (restoredAuditIds.length > 0) {
+        const placeholders = restoredAuditIds.map(() => '?').join(',');
+        await conn.query(
+          `DELETE FROM deleted_records_audit WHERE audit_id IN (${placeholders})`,
+          restoredAuditIds
+        );
+      }
+    } else {
+      // Non-users table: restore just this single record as before
+      await insertRecord(conn, table, data);
+      await conn.query('DELETE FROM deleted_records_audit WHERE audit_id = ?', [id]);
+    }
+
+    await conn.commit();
     return res.json({ message: 'Record restored successfully' });
   } catch (err) {
+    try { await conn.rollback(); } catch (_) {}
     console.error('POST /api/admin/audit-log/:id/restore error:', err);
     if (err.code === 'ER_NO_REFERENCED_ROW_2') {
        return res.status(409).json({ error: 'Cannot restore: associated parent records (like User or Hospital) no longer exist.' });
@@ -160,6 +276,8 @@ router.post('/audit-log/:id/restore', async (req, res) => {
        return res.status(409).json({ error: 'Cannot restore: A record with this ID already exists.' });
     }
     return res.status(500).json({ error: `Failed to restore record: ${err.message}` });
+  } finally {
+    conn.release();
   }
 });
 

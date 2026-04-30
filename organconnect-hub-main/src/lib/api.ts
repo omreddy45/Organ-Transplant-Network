@@ -48,6 +48,12 @@ export const api = {
         '/auth/logout',
         { method: 'POST', body: JSON.stringify({ sessionId }) }
       ),
+
+    resetPassword: (email: string, newPassword: string) =>
+      request<{ message: string }>(
+        '/auth/reset-password',
+        { method: 'POST', body: JSON.stringify({ email, newPassword }) }
+      ),
   },
 
   // ───── Organs ─────
@@ -111,10 +117,13 @@ export const api = {
       ),
 
     reject: (id: number) =>
-      request<{ message: string }>(
-        `/match_requests/${id}/reject`,
-        { method: 'POST' }
-      ),
+      request<{ message: string }>(`/match_requests/${id}/reject`, {
+        method: 'POST',
+      }),
+    delete: (id: number) =>
+      request<{ message: string }>(`/match_requests/${id}`, {
+        method: 'DELETE',
+      }),
   },
 
   // ───── Donors ─────

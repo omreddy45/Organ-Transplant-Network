@@ -268,6 +268,27 @@ router.post('/login', async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
+// POST /api/auth/reset-password — Direct Password Reset
+// ──────────────────────────────────────────────
+router.post('/reset-password', async (req, res) => {
+  const { email, newPassword } = req.body;
+  if (!email || !newPassword) {
+    return res.status(400).json({ error: 'Email and new password are required' });
+  }
+  try {
+    const [rows] = await db.query('SELECT user_id FROM Users WHERE email = ?', [email]);
+    if (rows.length === 0) return res.status(404).json({ error: 'No account found with that email address.' });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE Users SET password_hash = ? WHERE email = ?', [hash, email]);
+    return res.json({ message: 'Password has been successfully reset.' });
+  } catch (err) {
+    console.error('Password reset error:', err);
+    return res.status(500).json({ error: 'Failed to reset password.' });
+  }
+});
+
+// ──────────────────────────────────────────────
 // POST /api/auth/logout
 // ──────────────────────────────────────────────
 router.post('/logout', async (req, res) => {

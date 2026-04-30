@@ -384,8 +384,14 @@ const OrganizationDashboard = () => {
                             </div>
                             <Button className="w-full rounded-xl bg-gradient-primary mt-2" onClick={() => {
                               if (!r._selectedDoctor) return toast.error("Please select a surgeon");
-                              const autoOrgan = inventory.find(o => o.availability_status === "available" && o.name === r.organ_type);
-                              if (!autoOrgan) return toast.error("No available organs of this type!");
+                              const matchingOrgans = inventory.filter(o => String(o.name).toLowerCase().trim() === String(r.organ_type).toLowerCase().trim());
+                              if (matchingOrgans.length === 0) {
+                                return toast.error(`No organs of type: ${r.organ_type} found in your inventory!`);
+                              }
+                              const autoOrgan = matchingOrgans.find(o => String(o.availability_status).toLowerCase().trim() === "available");
+                              if (!autoOrgan) {
+                                return toast.error(`Organ ${r.organ_type} found, but its status is '${matchingOrgans[0].availability_status}' (must be 'available')!`);
+                              }
                               
                               api.matchRequests.assign(r.request_id, {
                                 organ_id: autoOrgan.organ_id,

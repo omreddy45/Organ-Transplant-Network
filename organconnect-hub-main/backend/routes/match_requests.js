@@ -7,6 +7,15 @@ const router = Router();
 router.post('/', async (req, res) => {
   const { patient_id, organ_type, urgency_level } = req.body;
   try {
+    // Check for existing active request
+    const [existing] = await db.query(
+      "SELECT * FROM Match_Request WHERE patient_id = ? AND organ_type = ? AND status IN ('pending', 'matched')",
+      [patient_id, organ_type]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({ error: `You already have an active request for a ${organ_type}.` });
+    }
+
     const [result] = await db.query(
       "INSERT INTO Match_Request (patient_id, organ_type, urgency_level, status) VALUES (?, ?, ?, 'pending')",
       [patient_id, organ_type, urgency_level || 'normal']
@@ -96,6 +105,23 @@ router.post('/:id/reject', async (req, res) => {
   } catch(err) {
     console.error(err);
     res.status(500).json({ error: `Failed to reject match request: ${err.message}` });
+  }
+});
+
+// Delete pending match request
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [rows] = await db.query("SELECT status FROM Match_Request WHERE request_id = ?", [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Request not found' });
+    if (rows[0].status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending requests can be deleted.' });
+    }
+    await db.query("DELETE FROM Match_Request WHERE request_id = ?", [id]);
+    res.json({ message: 'Request deleted successfully' });
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ error: `Failed to delete match request: ${err.message}` });
   }
 });
 

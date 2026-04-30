@@ -80,6 +80,17 @@ const DoctorDashboard = () => {
     { label: "Schedule", to: "/dashboard/doctor", icon: Calendar, onClick: () => setSection("schedule") },
   ];
 
+  if (!doctorId) {
+    return (
+      <DashboardLayout nav={nav} title="Doctor Dashboard" subtitle="Account Error">
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <div className="text-xl font-bold text-destructive mb-2">Account Orphaned</div>
+          <div className="text-muted-foreground">Your hospital's organization account has been deleted from the system.<br/>Please contact the system administrator.</div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (loading) {
     return (
       <DashboardLayout nav={nav} title="Doctor Dashboard" subtitle={orgName || "Manage patients and transplants"}>
