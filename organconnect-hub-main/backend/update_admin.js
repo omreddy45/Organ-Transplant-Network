@@ -5,11 +5,11 @@ async function updateAdmin() {
   try {
     const hash = await bcrypt.hash('admin@gmail.com', 10);
     // Delete existing admin
-    await db.query("DELETE FROM Users WHERE role = 'admin'");
+    await db.query("DELETE FROM users WHERE role = 'admin'");
     
     // Insert new admin
     await db.query(
-      "INSERT INTO Users (username, email, password_hash, role) VALUES ('admin', 'admin@gmail.com', ?, 'admin')",
+      "INSERT INTO users (username, email, password_hash, role) VALUES ('admin', 'admin@gmail.com', ?, 'admin')",
       [hash]
     );
     console.log('✅ Updated admin account to admin@gmail.com');

@@ -63,11 +63,11 @@ app.use((err, _req, res, _next) => {
 // ───── Seed admin account if not exists ─────
 async function seedAdmin() {
   try {
-    const [rows] = await db.query("SELECT user_id FROM Users WHERE role = 'admin' LIMIT 1");
+    const [rows] = await db.query("SELECT user_id FROM users WHERE role = 'admin' LIMIT 1");
     if (rows.length === 0) {
       const hash = await bcrypt.hash('admin@gmail.com', 10);
       await db.query(
-        "INSERT INTO Users (username, email, password_hash, role) VALUES ('admin', 'admin@gmail.com', ?, 'admin')",
+        "INSERT INTO users (username, email, password_hash, role) VALUES ('admin', 'admin@gmail.com', ?, 'admin')",
         [hash]
       );
       console.log('🔑 Admin account seeded: admin@gmail.com / admin@gmail.com');
