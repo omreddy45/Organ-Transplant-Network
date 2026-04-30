@@ -50,7 +50,7 @@ router.get('/users', async (req, res) => {
       LEFT JOIN donor d ON d.user_id = u.user_id
       LEFT JOIN doctor doc ON doc.user_id = u.user_id
       LEFT JOIN organization o ON o.user_id = u.user_id
-      LEFT JOIN Organization_Head oh ON oh.user_id = u.user_id
+      LEFT JOIN organization_head oh ON oh.user_id = u.user_id
       WHERE 1=1
     `;
     const params = [];
@@ -92,7 +92,7 @@ router.delete('/users/:id', async (req, res) => {
           // Delete the organization head user
           await conn.query(`
             DELETE FROM users 
-            WHERE user_id IN (SELECT user_id FROM Organization_Head WHERE org_id = ?)
+            WHERE user_id IN (SELECT user_id FROM organization_head WHERE org_id = ?)
           `, [orgId]);
         }
       }
@@ -127,7 +127,7 @@ router.get('/organizations', async (req, res) => {
              (SELECT COUNT(*) FROM transplant t WHERE t.org_id = o.org_id) AS transplant_count
       FROM organization o
       JOIN users u ON o.user_id = u.user_id
-      LEFT JOIN Organization_Head oh ON oh.org_id = o.org_id
+      LEFT JOIN organization_head oh ON oh.org_id = o.org_id
       ORDER BY o.org_id DESC
     `);
     return res.json(rows);

@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
 
     // Attach phones and medical history
     for (const pat of rows) {
-      const [phones] = await db.query('SELECT phone FROM Patient_Phone WHERE patient_id = ?', [pat.patient_id]);
+      const [phones] = await db.query('SELECT phone FROM patient_phone WHERE patient_id = ?', [pat.patient_id]);
       pat.phones = phones.map(p => p.phone);
 
       const [history] = await db.query('SELECT history_id, medical_detail, record_date FROM medical_history WHERE patient_id = ? ORDER BY record_date DESC', [pat.patient_id]);

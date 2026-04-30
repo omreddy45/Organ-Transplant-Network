@@ -27,14 +27,14 @@ router.get('/', async (req, res) => {
       const [rows] = await db.query('SELECT * FROM patient WHERE user_id = ?', [user_id]);
       if (rows.length) {
         profile = rows[0];
-        const [ph] = await db.query('SELECT phone FROM Patient_Phone WHERE patient_id = ?', [rows[0].patient_id]);
+        const [ph] = await db.query('SELECT phone FROM patient_phone WHERE patient_id = ?', [rows[0].patient_id]);
         phones = ph.map(p => p.phone);
       }
     } else if (user.role === 'donor') {
       const [rows] = await db.query('SELECT * FROM donor WHERE user_id = ?', [user_id]);
       if (rows.length) {
         profile = rows[0];
-        const [ph] = await db.query('SELECT phone FROM Donor_Phone WHERE donor_id = ?', [rows[0].donor_id]);
+        const [ph] = await db.query('SELECT phone FROM donor_phone WHERE donor_id = ?', [rows[0].donor_id]);
         phones = ph.map(p => p.phone);
       }
     } else if (user.role === 'doctor') {
@@ -46,17 +46,17 @@ router.get('/', async (req, res) => {
       `, [user_id]);
       if (rows.length) {
         profile = rows[0];
-        const [ph] = await db.query('SELECT phone FROM Doctor_Phone WHERE doctor_id = ?', [rows[0].doctor_id]);
+        const [ph] = await db.query('SELECT phone FROM doctor_phone WHERE doctor_id = ?', [rows[0].doctor_id]);
         phones = ph.map(p => p.phone);
       }
     } else if (user.role === 'organization') {
       const [rows] = await db.query('SELECT * FROM organization WHERE user_id = ?', [user_id]);
       if (rows.length) {
         profile = rows[0];
-        const [ph] = await db.query('SELECT phone FROM Organization_Phone WHERE org_id = ?', [rows[0].org_id]);
+        const [ph] = await db.query('SELECT phone FROM organization_phone WHERE org_id = ?', [rows[0].org_id]);
         phones = ph.map(p => p.phone);
         // Get org head info
-        const [head] = await db.query('SELECT * FROM Organization_Head WHERE org_id = ?', [rows[0].org_id]);
+        const [head] = await db.query('SELECT * FROM organization_head WHERE org_id = ?', [rows[0].org_id]);
         if (head.length) profile.head = head[0];
       }
     }
@@ -107,9 +107,9 @@ router.put('/update', async (req, res) => {
       if (phones) {
         const [pRows] = await db.query('SELECT patient_id FROM patient WHERE user_id = ?', [user_id]);
         if (pRows.length) {
-          await db.query('DELETE FROM Patient_Phone WHERE patient_id = ?', [pRows[0].patient_id]);
+          await db.query('DELETE FROM patient_phone WHERE patient_id = ?', [pRows[0].patient_id]);
           for (const ph of phones) {
-            await db.query('INSERT INTO Patient_Phone (patient_id, phone) VALUES (?, ?)', [pRows[0].patient_id, ph]);
+            await db.query('INSERT INTO patient_phone (patient_id, phone) VALUES (?, ?)', [pRows[0].patient_id, ph]);
           }
         }
       }
@@ -129,9 +129,9 @@ router.put('/update', async (req, res) => {
       if (phones) {
         const [dRows] = await db.query('SELECT donor_id FROM donor WHERE user_id = ?', [user_id]);
         if (dRows.length) {
-          await db.query('DELETE FROM Donor_Phone WHERE donor_id = ?', [dRows[0].donor_id]);
+          await db.query('DELETE FROM donor_phone WHERE donor_id = ?', [dRows[0].donor_id]);
           for (const ph of phones) {
-            await db.query('INSERT INTO Donor_Phone (donor_id, phone) VALUES (?, ?)', [dRows[0].donor_id, ph]);
+            await db.query('INSERT INTO donor_phone (donor_id, phone) VALUES (?, ?)', [dRows[0].donor_id, ph]);
           }
         }
       }
@@ -152,9 +152,9 @@ router.put('/update', async (req, res) => {
       if (phones) {
         const [docRows] = await db.query('SELECT doctor_id FROM doctor WHERE user_id = ?', [user_id]);
         if (docRows.length) {
-          await db.query('DELETE FROM Doctor_Phone WHERE doctor_id = ?', [docRows[0].doctor_id]);
+          await db.query('DELETE FROM doctor_phone WHERE doctor_id = ?', [docRows[0].doctor_id]);
           for (const ph of phones) {
-            await db.query('INSERT INTO Doctor_Phone (doctor_id, phone) VALUES (?, ?)', [docRows[0].doctor_id, ph]);
+            await db.query('INSERT INTO doctor_phone (doctor_id, phone) VALUES (?, ?)', [docRows[0].doctor_id, ph]);
           }
         }
       }
@@ -175,9 +175,9 @@ router.put('/update', async (req, res) => {
       if (phones) {
         const [orgRows] = await db.query('SELECT org_id FROM organization WHERE user_id = ?', [user_id]);
         if (orgRows.length) {
-          await db.query('DELETE FROM Organization_Phone WHERE org_id = ?', [orgRows[0].org_id]);
+          await db.query('DELETE FROM organization_phone WHERE org_id = ?', [orgRows[0].org_id]);
           for (const ph of phones) {
-            await db.query('INSERT INTO Organization_Phone (org_id, phone) VALUES (?, ?)', [orgRows[0].org_id, ph]);
+            await db.query('INSERT INTO organization_phone (org_id, phone) VALUES (?, ?)', [orgRows[0].org_id, ph]);
           }
         }
       }

@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
        JOIN users u ON s.user_id = u.user_id
        LEFT JOIN organization o ON o.user_id = u.user_id AND o.org_id = ?
        LEFT JOIN doctor d ON d.user_id = u.user_id AND d.org_id = ?
-       LEFT JOIN Organization_Head oh ON oh.user_id = u.user_id AND oh.org_id = ?
+       LEFT JOIN organization_head oh ON oh.user_id = u.user_id AND oh.org_id = ?
        WHERE o.org_id IS NOT NULL
           OR d.org_id IS NOT NULL
           OR oh.org_id IS NOT NULL

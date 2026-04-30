@@ -108,7 +108,7 @@ router.post('/signup', async (req, res) => {
       const [patientRows] = await conn.query('SELECT patient_id FROM patient WHERE user_id = ?', [userId]);
       const ph = phoneNumber || phone;
       if (ph && patientRows.length > 0) {
-        await conn.query('INSERT INTO Patient_Phone (patient_id, phone) VALUES (?, ?)', [patientRows[0].patient_id, ph]);
+        await conn.query('INSERT INTO patient_phone (patient_id, phone) VALUES (?, ?)', [patientRows[0].patient_id, ph]);
       }
     }
 
@@ -124,7 +124,7 @@ router.post('/signup', async (req, res) => {
       const [donorRows] = await conn.query('SELECT donor_id FROM donor WHERE user_id = ?', [userId]);
       const ph = phoneNumber || phone;
       if (ph && donorRows.length > 0) {
-        await conn.query('INSERT INTO Donor_Phone (donor_id, phone) VALUES (?, ?)', [donorRows[0].donor_id, ph]);
+        await conn.query('INSERT INTO donor_phone (donor_id, phone) VALUES (?, ?)', [donorRows[0].donor_id, ph]);
       }
     }
 
@@ -147,7 +147,7 @@ router.post('/signup', async (req, res) => {
       const [docRows] = await conn.query('SELECT doctor_id FROM doctor WHERE user_id = ?', [userId]);
       const ph = phoneNumber || phone;
       if (ph && docRows.length > 0) {
-        await conn.query('INSERT INTO Doctor_Phone (doctor_id, phone) VALUES (?, ?)', [docRows[0].doctor_id, ph]);
+        await conn.query('INSERT INTO doctor_phone (doctor_id, phone) VALUES (?, ?)', [docRows[0].doctor_id, ph]);
       }
     }
 
@@ -162,7 +162,7 @@ router.post('/signup', async (req, res) => {
         const oid = orgRows[0].org_id;
         const ph = phoneNumber || phone;
         if (ph) {
-          await conn.query('INSERT INTO Organization_Phone (org_id, phone) VALUES (?, ?)', [oid, ph]);
+          await conn.query('INSERT INTO organization_phone (org_id, phone) VALUES (?, ?)', [oid, ph]);
         }
       }
     }
@@ -233,7 +233,7 @@ router.post('/login', async (req, res) => {
           name = o[0].name; roleId = o[0].org_id; orgId = o[0].org_id; 
         } else {
           // Check if they are a Head
-          const [h] = await db.query('SELECT org_id, name FROM Organization_Head WHERE user_id = ?', [user.user_id]);
+          const [h] = await db.query('SELECT org_id, name FROM organization_head WHERE user_id = ?', [user.user_id]);
           if (h.length) {
             name = h[0].name; roleId = h[0].org_id; orgId = h[0].org_id;
             user.role = 'head'; // override role in response payload so frontend routes to Head Dashboard
@@ -316,9 +316,9 @@ router.post('/add-head', async (req, res) => {
     await conn.beginTransaction();
 
     // ── Remove any existing head for this organization ──
-    const [existingHeads] = await conn.query("SELECT user_id FROM Organization_Head WHERE org_id = ?", [org_id]);
+    const [existingHeads] = await conn.query("SELECT user_id FROM organization_head WHERE org_id = ?", [org_id]);
     for (const h of existingHeads) {
-      await conn.query("DELETE FROM Organization_Head WHERE user_id = ?", [h.user_id]);
+      await conn.query("DELETE FROM organization_head WHERE user_id = ?", [h.user_id]);
       await conn.query("DELETE FROM users WHERE user_id = ?", [h.user_id]);
     }
 
@@ -331,7 +331,7 @@ router.post('/add-head', async (req, res) => {
     const userId = userResult.insertId;
 
     await conn.query(
-      "INSERT INTO Organization_Head (org_id, user_id, name, joining_date, term_length) VALUES (?, ?, ?, CURDATE(), ?)",
+      "INSERT INTO organization_head (org_id, user_id, name, joining_date, term_length) VALUES (?, ?, ?, CURDATE(), ?)",
       [org_id, userId, name, term_length || 5]
     );
 
@@ -351,7 +351,7 @@ router.post('/add-head', async (req, res) => {
 // ──────────────────────────────────────────────
 router.get('/head/:org_id', async (req, res) => {
   try {
-    const [h] = await db.query('SELECT name FROM Organization_Head WHERE org_id = ?', [req.params.org_id]);
+    const [h] = await db.query('SELECT name FROM organization_head WHERE org_id = ?', [req.params.org_id]);
     if (h.length > 0) return res.json(h[0]);
     return res.status(404).json({ error: "Not found" });
   } catch (err) {
@@ -387,13 +387,13 @@ router.delete('/head/:org_id', async (req, res) => {
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
-    const [heads] = await conn.query('SELECT user_id FROM Organization_Head WHERE org_id = ?', [org_id]);
+    const [heads] = await conn.query('SELECT user_id FROM organization_head WHERE org_id = ?', [org_id]);
     if (!heads.length) {
       await conn.rollback();
       return res.status(404).json({ error: 'No head found for this organization' });
     }
     for (const h of heads) {
-      await conn.query('DELETE FROM Organization_Head WHERE user_id = ?', [h.user_id]);
+      await conn.query('DELETE FROM organization_head WHERE user_id = ?', [h.user_id]);
       await conn.query('DELETE FROM users WHERE user_id = ?', [h.user_id]);
     }
     await conn.commit();

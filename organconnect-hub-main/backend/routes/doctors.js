@@ -30,7 +30,7 @@ router.get('/', async (req, res) => {
 
     // Attach phones and last visit date for each doctor
     for (const doc of rows) {
-      const [phones] = await db.query('SELECT phone FROM Doctor_Phone WHERE doctor_id = ?', [doc.doctor_id]);
+      const [phones] = await db.query('SELECT phone FROM doctor_phone WHERE doctor_id = ?', [doc.doctor_id]);
       doc.phones = phones.map(p => p.phone);
 
       const [visits] = await db.query(
