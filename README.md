@@ -124,17 +124,30 @@ To run OrganConnect locally, follow these steps:
    Open a separate terminal, navigate to the frontend directory, and run:  
    `npm run dev`
 
-## 18. Results and Outputs
+## 18. Administrative Management & Account Restoration
+OrganConnect includes a powerful administrative toolset for managing users and ensuring data integrity.
+
+* **Admin Login Credentials:**
+  The system automatically seeds an initial administrative account upon deployment.
+  * **Email:** `admin@gmail.com`
+  * **Password:** `admin@gmail.com`
+  *(Note: It is highly recommended to change this password after initial login).*
+
+* **Account Restoration:**
+  If a user account is deleted, their data is securely moved to the `Deleted_Records_Audit` table. If the system administrator chooses to restore the account, the user's role-specific information (such as their patient or donor profile) will be fully reinstated.
+  * **Important:** During restoration, for security reasons, the user's original password is not recovered. Their password is automatically reset to the default value: **`restored`**. The user should be instructed to log in using this temporary password and update it immediately.
+
+## 19. Results and Outputs
 * Successfully built a responsive, highly accessible web interface.
 * The database accurately denies invalid inputs (e.g., trying to use an organ twice throws an SQL Error, which the backend catches and turns into a user-friendly frontend message).
 * Role-based routing successfully prevents a Patient from accessing the Organization dashboard.
 
-## 19. Testing
+## 20. Testing
 * **Unit Testing:** Basic logic checking for functions and ensuring React components render properly.
 * **Integration Testing:** Sending dummy requests using tools like Postman/ThunderClient to ensure the Express APIs write correctly to the MySQL DB.
 * **UI/UX Testing:** Manual testing across different screen sizes to ensure Tailwind CSS responsiveness on mobile and desktop.
 
-## 20. Advantages and Limitations
+## 21. Advantages and Limitations
 **Advantages:**
 * Completely digitalizes paper trails.
 * Enforces strict real-world rules at the database level (data cannot be manipulated to exist in two places).
@@ -144,15 +157,15 @@ To run OrganConnect locally, follow these steps:
 * Currently relies on Organization Admins manually pairing organs with patients.
 * Relies on users correctly self-reporting medical history.
 
-## 21. Future Scope
+## 22. Future Scope
 * **AI Matching:** Implementing a machine learning algorithm to automatically suggest the best Patient-Organ match based on blood type, age, and medical history.
 * **Email/SMS Automation:** Integrating NodeMailer or Twilio so doctors and patients receive immediate text alerts when an organ match is made.
 * **IoT Logistics:** Adding a module for delivery drivers to track the physical temperature and location of the organ block via GPS and IoT sensors.
 
-## 22. Conclusion
+## 23. Conclusion
 The OrganConnect project successfully demonstrates how web technologies and relational databases can be combined to solve real-world logistical problems in the medical sector. By using React, Node.js, and MySQL, the system enforces secure, strict data handling, ensuring that the process of donating and receiving organs is transparent, trackable, and efficient.
 
-## 23. References
+## 24. References
 * Express.js Official Documentation
 * React and TypeScript Documentation
 * MySQL Database Systems Guidelines
