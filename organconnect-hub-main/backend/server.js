@@ -22,7 +22,29 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ───── Middleware ─────
-app.use(cors({ origin: ['http://localhost:8080', 'http://localhost:5173', 'http://localhost:3000'], credentials: true }));
+const allowedOrigins = [
+  'http://localhost:8080', 
+  'http://localhost:5173', 
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,
+  'https://organconnect.vercel.app',
+  'https://organ-transplant-network.vercel.app' // Just in case Vercel used this name
+];
+
+app.use(cors({ 
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Also allow any vercel.app subdomain for preview deployments
+    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
+    
+    return callback(new Error('CORS policy violation'), false);
+  }, 
+  credentials: true 
+}));
 app.use(express.json());
 
 // ───── Request logger (dev) ─────
