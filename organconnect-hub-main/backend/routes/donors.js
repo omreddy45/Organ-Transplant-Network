@@ -71,7 +71,7 @@ router.post('/pledge', async (req, res) => {
     }
 
     const [result] = await db.query(
-      'INSERT INTO donor_pledge (donor_id, org_id, organ_type, status) VALUES (?, ?, ?, "pending")',
+      `INSERT INTO donor_pledge (donor_id, org_id, organ_type, status) VALUES (?, ?, ?, 'pending')`,
       [donor_id, org_id, organ_type]
     );
     res.json({ message: 'Pledge submitted', pledge_id: result.insertId });
