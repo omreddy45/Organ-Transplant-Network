@@ -3,7 +3,7 @@
 // All calls go through the Vite proxy → Express backend
 // ──────────────────────────────────────────────
 
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = import.meta.env.VITE_API_URL || 'https://organ-transplant-network.onrender.com';
 // Strip trailing slash if the user accidentally added one, then append /api
 const BASE = API_URL ? `${API_URL.replace(/\/$/, '')}/api` : '/api';
 
